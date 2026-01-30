@@ -8,6 +8,17 @@ using System.Text;
 using System.Globalization;
 using ReferenciaXPayAPI_Core.Models;
 
+//api-estandar-restful
+// 200 OK
+// 201 Created (Creado)
+// 304 Not Modified (No modificado)
+// 400 Bad Request (Error de consulta)
+// 401 Unauthorized (No autorizado)
+// 403 Forbidden (Prohibido)
+// 404 Not Found (No encontrado)
+// 422 (Unprocessable Entity (Entidad no procesable)
+// 500 Internal Server Error (Error Interno de Servidor)
+
 namespace ReferenciaXPayAPI_Core.Logic
 {
     public class ReferenciaLogic
@@ -97,6 +108,184 @@ namespace ReferenciaXPayAPI_Core.Logic
                     }
                 }
             }
+        }
+
+        public ApiResponse<UsuarioModel> RegistrarUsuario(UsuarioRegistroModel model)
+        {
+            ApiResponse<UsuarioModel> resp = new ApiResponse<UsuarioModel> 
+            { 
+                Code = "99", 
+                Message = "Error Desconocido" 
+            };
+
+            using (SqlConnection conn = new SqlConnection(_connectionString))
+            {
+                using (SqlCommand sqlComando = new SqlCommand("dbo.UsuarioXPay_Insert", conn))
+                {
+                    try
+                    {
+                        sqlComando.CommandType = CommandType.StoredProcedure;
+                        sqlComando.Parameters.AddWithValue("@UserId", model.UserId);
+                        sqlComando.Parameters.AddWithValue("@Nombre", model.Nombre ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@Apellido", model.Apellido ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@Email", model.Email ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@Celular", model.Celular);
+                        sqlComando.Parameters.AddWithValue("@PasswordHash", model.Password ?? string.Empty);
+                        
+                        conn.Open();
+
+                        using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
+                        {
+                            if (sqlReader.HasRows)
+                            {
+                                while (sqlReader.Read())
+                                {
+                                    resp.Code = sqlReader["RESPCODE"]?.ToString() ?? "99";
+                                    resp.Message = sqlReader["DESCCODE"]?.ToString() ?? "Error";
+                                    
+                                    if (resp.Code == "00" || resp.Code == "OK")
+                                {
+                                    resp.Code = "success";
+                                    resp.Message = "Registro exitoso";
+                                    resp.Data = new UsuarioModel
+                                    {
+                                        UserId = model.UserId,
+                                        Celular = model.Celular,
+                                        Nombre = model.Nombre,
+                                        Apellido = model.Apellido,
+                                        Email = model.Email
+                                    };
+                                }
+
+                                    GrabaLog($"Registro Usuario: {model.UserId}, Resp: {resp.Code}", "UsuarioXPay_Insert");
+                                }
+                            }
+                        }
+                    }
+                    catch (SqlException ex) when (ex.Number == 2627 || ex.Number == 2601)
+                    {
+                        GrabaLog("Usuario o Email duplicado: " + ex.Message, "UsuarioXPay_Insert");
+                        resp.Code = "409";
+                        resp.Message = "El usuario o el correo electrónico ya se encuentran registrados.";
+                    }
+                    catch (Exception ex)
+                    {
+                        GrabaLog("Error al registrar usuario: " + ex.Message, "UsuarioXPay_Insert");
+                        resp.Code = "500";
+                        resp.Message = ex.Message;
+                    }
+                }
+            }
+            return resp;
+        }
+
+        public ApiResponse<UsuarioModel> ActualizarUsuario(UsuarioUpdateModel model)
+        {
+            ApiResponse<UsuarioModel> resp = new ApiResponse<UsuarioModel> { Code = "99", Message = "Error Desconocido" };
+
+            using (SqlConnection conn = new SqlConnection(_connectionString))
+            {
+                using (SqlCommand sqlComando = new SqlCommand("dbo.UsuarioXPay_Edit", conn))
+                {
+                    try
+                    {
+                        sqlComando.CommandType = CommandType.StoredProcedure;
+                        sqlComando.Parameters.AddWithValue("@UserId", model.UserId);
+                        sqlComando.Parameters.AddWithValue("@Nombre", model.Nombre ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@Apellido", model.Apellido ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@Email", model.Email ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@Celular", model.Celular ?? string.Empty);
+                        
+                        conn.Open();
+
+                        using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
+                        {
+                            if (sqlReader.HasRows)
+                            {
+                                while (sqlReader.Read())
+                                {
+                                    string resultKey = sqlReader["RESPCODE"]?.ToString() ?? "99";
+                                    resp.Message = sqlReader["DESCCODE"]?.ToString() ?? "Error";
+
+                                    if (resultKey == "00" || resultKey == "OK")
+                                    {
+                                        resp.Code = "success";
+                                        resp.Message = "Actualización exitosa";
+                                        resp.Data = new UsuarioModel
+                                        {
+                                            UserId = model.UserId,
+                                            Nombre = model.Nombre,
+                                            Apellido = model.Apellido,
+                                            Email = model.Email,
+                                            Celular = model.Celular ?? string.Empty
+                                        };
+                                    }
+                                    else
+                                    {
+                                        resp.Code = "404";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        GrabaLog("Error al actualizar usuario: " + ex.Message, "UsuarioXPay_Edit");
+                        resp.Code = "500";
+                        resp.Message = ex.Message;
+                    }
+                }
+            }
+            return resp;
+        }
+
+        public ApiResponse<string> EliminarUsuario(string userId)
+        {
+            ApiResponse<string> resp = new ApiResponse<string> { Code = "99", Message = "Error Desconocido" };
+
+            using (SqlConnection conn = new SqlConnection(_connectionString))
+            {
+                using (SqlCommand sqlComando = new SqlCommand("dbo.UsuarioXPay_Delete", conn))
+                {
+                    try
+                    {
+                        sqlComando.CommandType = CommandType.StoredProcedure;
+                        sqlComando.Parameters.AddWithValue("@UserId", userId);
+                        
+                        conn.Open();
+
+                        using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
+                        {
+                            if (sqlReader.HasRows)
+                            {
+                                while (sqlReader.Read())
+                                {
+                                    string resultKey = sqlReader["RESPCODE"]?.ToString() ?? "99";
+                                    resp.Message = sqlReader["DESCCODE"]?.ToString() ?? "Error";
+
+                                    if (resultKey == "00" || resultKey == "OK")
+                                    {
+                                        resp.Code = "success";
+                                        resp.Message = "Eliminación exitosa";
+                                        resp.Data = userId;
+                                    }
+                                    else
+                                    {
+                                        resp.Code = "404";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        GrabaLog("Error al eliminar usuario: " + ex.Message, "UsuarioXPay_Delete");
+                        resp.Code = "500";
+                        resp.Message = ex.Message;
+                    }
+                }
+            }
+            return resp;
         }
 
         public void ObtenerCampos(string referencia, out string regPat, out string perPag, out string origen, out string fsua, out string fechVenc, out string impImss, out string impRcv, out string impApv, out string impAcv)

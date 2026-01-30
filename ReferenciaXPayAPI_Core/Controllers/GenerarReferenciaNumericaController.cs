@@ -25,11 +25,11 @@ namespace ReferenciaXPayAPI_Core.Controllers
 
             try
             {
-                if (model == null)
+                if (model == null || string.IsNullOrEmpty(model.Referencia))
                 {
                     _logic.GrabaLog("Sin definicion", "err");
-                    resp.Respcode = "14";
-                    return NoContent();
+                    resp.Respcode = "400";
+                    return BadRequest(new { code = "400", message = "Referencia es obligatoria" });
                 }
 
                 var jsonReqMessage = JsonConvert.SerializeObject(model);
@@ -65,28 +65,31 @@ namespace ReferenciaXPayAPI_Core.Controllers
                         {
                             importeIMSS = parsedImporte;
                         }
-                    }
 
-                    resp.Respcode = "00";
-                    resp.ReferenciaNumerica = cReferenciaNumerica;
-                    resp.Vigencia = fechaVigenciaIMSS;
-                    resp.Monto = importeIMSS;
+                        resp.Respcode = "00";
+                        resp.ReferenciaNumerica = cReferenciaNumerica;
+                        resp.Vigencia = fechaVigenciaIMSS;
+                        resp.Monto = importeIMSS;
+                        return Ok(resp);
+                    }
+                    else
+                    {
+                        // Validation failed (Unprocessable Entity)
+                        return UnprocessableEntity(new { code = "422", message = "La referencia no es válida", detail = cRespcode });
+                    }
                 }
                 else
                 {
                     resp.Respcode = "14";
                     resp.ReferenciaNumerica = string.Empty;
+                    return StatusCode(500, new { code = "500", message = "Error en el procesamiento de la base de datos" });
                 }
             }
             catch (Exception ex)
             {
                 _logic.GrabaLog(ex.Message, "err");
-                resp.Respcode = "30";
-                resp.ReferenciaNumerica = string.Empty;
-                return BadRequest(resp);
+                return StatusCode(500, new { code = "500", message = ex.Message });
             }
-
-            return Ok(resp);
         }
     }
 }
