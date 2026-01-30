@@ -1,0 +1,6 @@
+@ReferenciaXPayAPI_Core_HostAddress = http://localhost:5136
+
+GET {{ReferenciaXPayAPI_Core_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

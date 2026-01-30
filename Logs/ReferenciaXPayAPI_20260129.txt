@@ -1,0 +1,2 @@
+01/29/2026 17:44:10	json	{"Referencia":"A0000000B000C0D0000E0000F000000G000000H000000I000000JKLM"}
+01/29/2026 17:44:25	InsertAbonoDB	Ocurrio un error: Error relacionado con la red o específico de la instancia mientras se establecía una conexión con el servidor SQL Server. No se encontró el servidor o éste no estaba accesible. Compruebe que el nombre de la instancia es correcto y que SQL Server está configurado para admitir conexiones remotas. (provider: Proveedor de TCP, error: 35 - Se interceptó una excepción interna)
