@@ -18,12 +18,12 @@ namespace ReferenciaXPayAPI_Core.Controllers
         [HttpPost]
         public IActionResult Post([FromBody] UsuarioRegistroModel model)
         {
-            if (model == null || string.IsNullOrEmpty(model.UserId) || string.IsNullOrEmpty(model.Celular))
+            if (model == null || string.IsNullOrEmpty(model.UserId) || string.IsNullOrEmpty(model.Celular) || model.RolXPayId <= 0)
             {
                 return BadRequest(new ApiResponse<UsuarioModel> 
                 { 
                     Code = "400", 
-                    Message = "UserId y Celular son campos obligatorios." 
+                    Message = "UserId, Celular y RolXPayId son campos obligatorios." 
                 });
             }
 

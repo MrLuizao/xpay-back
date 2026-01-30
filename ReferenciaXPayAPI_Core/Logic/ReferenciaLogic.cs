@@ -131,6 +131,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                         sqlComando.Parameters.AddWithValue("@Email", model.Email ?? string.Empty);
                         sqlComando.Parameters.AddWithValue("@Celular", model.Celular);
                         sqlComando.Parameters.AddWithValue("@PasswordHash", model.Password ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@RolXPayId", model.RolXPayId);
                         
                         conn.Open();
 
@@ -150,8 +151,9 @@ namespace ReferenciaXPayAPI_Core.Logic
                                     resp.Data = new UsuarioModel
                                     {
                                         UserId = model.UserId,
-                                        Celular = model.Celular,
-                                        Nombre = model.Nombre,
+                                            Celular = model.Celular,
+                                            RolXPayId = model.RolXPayId,
+                                            Nombre = model.Nombre,
                                         Apellido = model.Apellido,
                                         Email = model.Email
                                     };
@@ -195,6 +197,11 @@ namespace ReferenciaXPayAPI_Core.Logic
                         sqlComando.Parameters.AddWithValue("@Apellido", model.Apellido ?? string.Empty);
                         sqlComando.Parameters.AddWithValue("@Email", model.Email ?? string.Empty);
                         sqlComando.Parameters.AddWithValue("@Celular", model.Celular ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@PasswordHash", model.Password ?? string.Empty);
+                        if (model.RolXPayId.HasValue)
+                        {
+                            sqlComando.Parameters.AddWithValue("@RolXPayId", model.RolXPayId.Value);
+                        }
                         
                         conn.Open();
 
@@ -217,7 +224,8 @@ namespace ReferenciaXPayAPI_Core.Logic
                                             Nombre = model.Nombre,
                                             Apellido = model.Apellido,
                                             Email = model.Email,
-                                            Celular = model.Celular ?? string.Empty
+                                            Celular = model.Celular ?? string.Empty,
+                                            RolXPayId = model.RolXPayId ?? 0 // Note: Ideally we'd fetch the current val if not provided
                                         };
                                     }
                                     else
