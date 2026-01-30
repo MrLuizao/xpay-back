@@ -54,6 +54,12 @@ namespace ReferenciaXPayAPI_Core.Models
         public string? Password { get; set; }
     }
 
+    public class LoginRequestModel
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+
     public class ApiResponse<T>
     {
         public string Code { get; set; } = string.Empty; // e.g. "201", "200", "400"

@@ -52,6 +52,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
             {
                 "success" or "200" => Ok(resp),
                 "404" => NotFound(resp),
+                "409" => Conflict(resp),
                 "500" => StatusCode(500, resp),
                 _ => BadRequest(resp)
             };
@@ -71,6 +72,26 @@ namespace ReferenciaXPayAPI_Core.Controllers
             {
                 "success" or "200" => Ok(resp),
                 "404" => NotFound(resp),
+                "500" => StatusCode(500, resp),
+                _ => BadRequest(resp)
+            };
+        }
+
+        [HttpPost("Login")]
+        public IActionResult Login([FromBody] LoginRequestModel model)
+        {
+            if (model == null || string.IsNullOrEmpty(model.UserId) || string.IsNullOrEmpty(model.Password))
+            {
+                return BadRequest(new ApiResponse<UsuarioModel> { Code = "400", Message = "UserId y Password son obligatorios." });
+            }
+
+            ApiResponse<UsuarioModel> resp = _logic.LoginUsuario(model);
+
+            return resp.Code switch
+            {
+                "success" => Ok(resp),
+                "401" => Unauthorized(resp),
+                "403" => StatusCode(403, resp),
                 "500" => StatusCode(500, resp),
                 _ => BadRequest(resp)
             };

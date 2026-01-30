@@ -228,6 +228,11 @@ namespace ReferenciaXPayAPI_Core.Logic
                                             RolXPayId = model.RolXPayId ?? 0 // Note: Ideally we'd fetch the current val if not provided
                                         };
                                     }
+                                    else if (resultKey == "02")
+                                    {
+                                        resp.Code = "409";
+                                        resp.Message = "El usuario ya se encuentra registrado";
+                                    }
                                     else
                                     {
                                         resp.Code = "404";
@@ -420,6 +425,75 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
 
             return codigoVerificacion;
+        }
+
+        public ApiResponse<UsuarioModel> LoginUsuario(LoginRequestModel model)
+        {
+            ApiResponse<UsuarioModel> resp = new ApiResponse<UsuarioModel>();
+            try
+            {
+                using (SqlConnection conn = new SqlConnection(_connectionString))
+                {
+                    using (SqlCommand sqlComando = new SqlCommand("dbo.UsuarioXPay_Login", conn))
+                    {
+                        sqlComando.CommandType = CommandType.StoredProcedure;
+                        sqlComando.Parameters.AddWithValue("@UserId", model.UserId);
+                        sqlComando.Parameters.AddWithValue("@PasswordHash", model.Password);
+
+                        conn.Open();
+
+                        using (SqlDataReader rd = sqlComando.ExecuteReader())
+                        {
+                            if (rd.Read())
+                            {
+                                string resultCode = rd["RESPCODE"].ToString() ?? "01";
+                                string resultMsg = rd["DESCCODE"].ToString() ?? "Error";
+
+                                if (resultCode == "00")
+                                {
+                                    resp.Code = "success";
+                                    resp.Message = "Login exitoso";
+                                    resp.Data = new UsuarioModel
+                                    {
+                                        UserId = rd["UserId"].ToString() ?? string.Empty,
+                                        Nombre = rd["Nombre"].ToString(),
+                                        Apellido = rd["Apellido"].ToString(),
+                                        Email = rd["Email"].ToString(),
+                                        Celular = rd["Celular"].ToString() ?? string.Empty,
+                                        RolXPayId = Convert.ToInt32(rd["RolXPayId"])
+                                    };
+                                }
+                                else if (resultCode == "02") // Role mismatch (but user valid)
+                                {
+                                    resp.Code = "403";
+                                    resp.Message = resultMsg;
+                                    resp.Data = new UsuarioModel
+                                    {
+                                        UserId = rd["UserId"].ToString() ?? string.Empty,
+                                        RolXPayId = Convert.ToInt32(rd["RolXPayId"])
+                                    };
+                                }
+                                else
+                                {
+                                    resp.Code = "401";
+                                    resp.Message = resultMsg;
+                                }
+                            }
+                            else
+                            {
+                                resp.Code = "401";
+                                resp.Message = "Credenciales incorrectas";
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                resp.Code = "500";
+                resp.Message = "Error interno: " + ex.Message;
+            }
+            return resp;
         }
     }
 }
