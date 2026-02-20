@@ -85,15 +85,24 @@ namespace ReferenciaXPayAPI_Core.Logic
 
                         using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
                         {
-                            if (sqlReader.HasRows)
+                            bool success = false;
+                            do
                             {
-                                while (sqlReader.Read())
+                                if (sqlReader.HasRows)
                                 {
-                                    respcode = sqlReader["RESPCODE"]?.ToString() ?? string.Empty;
-                                    referenciaNumerica = sqlReader["ReferenciaFinal"]?.ToString() ?? string.Empty;
+                                    while (sqlReader.Read())
+                                    {
+                                        respcode = sqlReader["RESPCODE"]?.ToString() ?? string.Empty;
+                                        referenciaNumerica = sqlReader["ReferenciaFinal"]?.ToString() ?? string.Empty;
 
-                                    GrabaLog($"RespCode: {respcode}, RefNum: {referenciaNumerica}", "ReferenciaNumericaXPay_Generar");
+                                        GrabaLog($"RespCode: {respcode}, RefNum: {referenciaNumerica}", "ReferenciaNumericaXPay_Generar");
+                                        success = true;
+                                    }
                                 }
+                            } while (sqlReader.NextResult()); // Pasa al siguiente result set (ignora contadores de filas afectadas por INSERT/UPDATE)
+
+                            if (success)
+                            {
                                 return 0;
                             }
                             else
@@ -105,7 +114,8 @@ namespace ReferenciaXPayAPI_Core.Logic
                     }
                     catch (Exception ex)
                     {
-                        GrabaLog("Ocurrio un error: " + ex.Message, "InsertAbonoDB");
+                        GrabaLog("Ocurrio un error para ref " + referencia + ": " + ex.Message, "InsertAbonoDB");
+                        respcode = ex.Message;
                         return 1;
                     }
                 }

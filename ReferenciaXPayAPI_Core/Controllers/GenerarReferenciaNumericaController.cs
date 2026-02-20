@@ -94,13 +94,14 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 {
                     resp.respcode = "14";
                     resp.referenciaNumerica = string.Empty;
-                    return StatusCode(500, new { code = "500", message = "Error en el procesamiento de la base de datos" });
+                    return StatusCode(500, new { code = "500", message = "Error en el procesamiento de la base de datos", detail = cRespcode });
                 }
             }
             catch (Exception ex)
             {
-                _logic.GrabaLog(ex.Message, "err");
-                return StatusCode(500, new { code = "500", message = ex.Message });
+                _logic.GrabaLog(ex.ToString(), "err_critico");
+                // ENVÍO EL ERROR CRUDO Y COMPLETO PARA PODER VER QUÉ SE ROMPE EN C#
+                return StatusCode(500, new { code = "500", message = "Error Crítico .NET", detail = ex.ToString() });
             }
         }
     }

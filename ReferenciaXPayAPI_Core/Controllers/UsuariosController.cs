@@ -46,6 +46,11 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 return BadRequest(new ApiResponse<UsuarioModel> { Code = "400", Message = "El modelo no puede ser nulo." });
             }
 
+            if (string.IsNullOrEmpty(model.UserId))
+            {
+                model.UserId = Guid.NewGuid().ToString();
+            }
+
             ApiResponse<UsuarioModel> resp = _logic.RegistrarUsuario(model);
 
             return resp.Code switch
