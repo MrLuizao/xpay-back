@@ -24,13 +24,15 @@ namespace ReferenciaXPayAPI_Core.Logic
     public class ReferenciaLogic
     {
         private readonly IConfiguration _configuration;
-        private readonly string _connectionString;
+        private readonly string _connectionReferencias;
+        private readonly string _connectionUsuarios;
         private readonly string _logPath;
 
         public ReferenciaLogic(IConfiguration configuration)
         {
             _configuration = configuration;
-            _connectionString = _configuration.GetValue<string>("BD_Def") ?? string.Empty;
+            _connectionReferencias = _configuration.GetValue<string>("BD_Referencias") ?? string.Empty;
+            _connectionUsuarios = _configuration.GetValue<string>("BD_Usuarios") ?? string.Empty;
             _logPath = _configuration.GetValue<string>("LogFiles") ?? string.Empty;
         }
 
@@ -66,12 +68,12 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
         }
 
-        public int GenerarBD(string referencia, out string respcode, out string referenciaNumerica)
+        public int GenerarBD(string referencia, ref string respcode, ref string referenciaNumerica)
         {
             respcode = string.Empty;
             referenciaNumerica = string.Empty;
 
-            using (SqlConnection conn = new SqlConnection(_connectionString))
+            using (SqlConnection conn = new SqlConnection(_connectionReferencias))
             {
                 using (SqlCommand sqlComando = new SqlCommand("ReferenciaNumericaXPay_Generar", conn))
                 {
@@ -118,7 +120,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                 Message = "Error Desconocido" 
             };
 
-            using (SqlConnection conn = new SqlConnection(_connectionString))
+            using (SqlConnection conn = new SqlConnection(_connectionUsuarios))
             {
                 using (SqlCommand sqlComando = new SqlCommand("dbo.UsuarioXPay_Insert", conn))
                 {
@@ -185,7 +187,7 @@ namespace ReferenciaXPayAPI_Core.Logic
         {
             ApiResponse<UsuarioModel> resp = new ApiResponse<UsuarioModel> { Code = "99", Message = "Error Desconocido" };
 
-            using (SqlConnection conn = new SqlConnection(_connectionString))
+            using (SqlConnection conn = new SqlConnection(_connectionUsuarios))
             {
                 using (SqlCommand sqlComando = new SqlCommand("dbo.UsuarioXPay_Edit", conn))
                 {
@@ -256,7 +258,7 @@ namespace ReferenciaXPayAPI_Core.Logic
         {
             ApiResponse<string> resp = new ApiResponse<string> { Code = "99", Message = "Error Desconocido" };
 
-            using (SqlConnection conn = new SqlConnection(_connectionString))
+            using (SqlConnection conn = new SqlConnection(_connectionUsuarios))
             {
                 using (SqlCommand sqlComando = new SqlCommand("dbo.UsuarioXPay_Delete", conn))
                 {
@@ -301,7 +303,7 @@ namespace ReferenciaXPayAPI_Core.Logic
             return resp;
         }
 
-        public void ObtenerCampos(string referencia, out string regPat, out string perPag, out string origen, out string fsua, out string fechVenc, out string impImss, out string impRcv, out string impApv, out string impAcv)
+        public void ObtenerCampos(string referencia, ref string regPat, ref string perPag, ref string origen, ref string fsua, ref string fechVenc, ref string impImss, ref string impRcv, ref string impApv, ref string impAcv)
         {
             regPat = referencia.Substring(0, 1) + Base36aBase10(referencia.Substring(1, 7)).ToString();
             perPag = Base36aBase10(referencia.Substring(8, 4)).ToString();
@@ -345,7 +347,7 @@ namespace ReferenciaXPayAPI_Core.Logic
             return $"{año}{mes:00}{dia:00}";
         }
 
-        public int ValidaReferencia(string referencia, out string respcode)
+        public int ValidaReferencia(string referencia, ref string respcode)
         {
             respcode = "00";
             if (referencia.Length != 53)
@@ -432,12 +434,15 @@ namespace ReferenciaXPayAPI_Core.Logic
             ApiResponse<UsuarioModel> resp = new ApiResponse<UsuarioModel>();
             try
             {
-                using (SqlConnection conn = new SqlConnection(_connectionString))
+                using (SqlConnection conn = new SqlConnection(_connectionUsuarios))
                 {
                     using (SqlCommand sqlComando = new SqlCommand("dbo.UsuarioXPay_Login", conn))
                     {
                         sqlComando.CommandType = CommandType.StoredProcedure;
-                        sqlComando.Parameters.AddWithValue("@UserId", model.UserId);
+                        // Si no viene UserId, intentamos usar el Email como identificador. 
+                        // Usamos ?? "" para evitar el error de "parameter not supplied" si ambos son nulos.
+                        string identificador = !string.IsNullOrEmpty(model.UserId) ? model.UserId : (model.Email ?? string.Empty);
+                        sqlComando.Parameters.AddWithValue("@UserId", identificador);
                         sqlComando.Parameters.AddWithValue("@PasswordHash", model.Password);
 
                         conn.Open();

@@ -38,20 +38,19 @@ namespace ReferenciaXPayAPI_Core.Controllers
             };
         }
 
-        [HttpPut]
-        public IActionResult Put([FromBody] UsuarioUpdateModel model)
+        [HttpPost("RegistroLocal")] // Cambiado de PUT a POST por solicitud para generar registro
+        public IActionResult RegistroLocal([FromBody] UsuarioRegistroModel model)
         {
-            if (model == null || string.IsNullOrEmpty(model.UserId))
+            if (model == null)
             {
-                return BadRequest(new ApiResponse<UsuarioModel> { Code = "400", Message = "UserId es obligatorio." });
+                return BadRequest(new ApiResponse<UsuarioModel> { Code = "400", Message = "El modelo no puede ser nulo." });
             }
 
-            ApiResponse<UsuarioModel> resp = _logic.ActualizarUsuario(model);
+            ApiResponse<UsuarioModel> resp = _logic.RegistrarUsuario(model);
 
             return resp.Code switch
             {
-                "success" or "200" => Ok(resp),
-                "404" => NotFound(resp),
+                "success" or "201" or "00" or "OK" => StatusCode(201, resp),
                 "409" => Conflict(resp),
                 "500" => StatusCode(500, resp),
                 _ => BadRequest(resp)
@@ -80,9 +79,9 @@ namespace ReferenciaXPayAPI_Core.Controllers
         [HttpPost("Login")]
         public IActionResult Login([FromBody] LoginRequestModel model)
         {
-            if (model == null || string.IsNullOrEmpty(model.UserId) || string.IsNullOrEmpty(model.Password))
+            if (model == null || string.IsNullOrEmpty(model.Password))
             {
-                return BadRequest(new ApiResponse<UsuarioModel> { Code = "400", Message = "UserId y Password son obligatorios." });
+                return BadRequest(new ApiResponse<UsuarioModel> { Code = "400", Message = "El Password es obligatorio." });
             }
 
             ApiResponse<UsuarioModel> resp = _logic.LoginUsuario(model);

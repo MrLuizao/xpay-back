@@ -9,10 +9,10 @@ namespace ReferenciaXPayAPI_Core.Models
 
     public class GeneraReferenciaNumericaResponse
     {
-        public string Respcode { get; set; } = string.Empty;
-        public string ReferenciaNumerica { get; set; } = string.Empty;
-        public DateTime? Vigencia { get; set; }
-        public double? Monto { get; set; }
+        public string respcode { get; set; } = string.Empty;
+        public string referenciaNumerica { get; set; } = string.Empty;
+        public DateTime? vigencia { get; set; }
+        public double? monto { get; set; }
     }
 
     public class UsuarioXPay
@@ -56,7 +56,8 @@ namespace ReferenciaXPayAPI_Core.Models
 
     public class LoginRequestModel
     {
-        public string UserId { get; set; } = string.Empty;
+        public string? UserId { get; set; }
+        public string? Email { get; set; }
         public string Password { get; set; } = string.Empty;
     }
 
