@@ -4,6 +4,8 @@ using ReferenciaXPayAPI_Core.Logic;
 using Newtonsoft.Json;
 using System.Net;
 using System.Globalization;
+using System.IO;
+using Microsoft.AspNetCore.Http;
 
 namespace ReferenciaXPayAPI_Core.Controllers
 {
@@ -12,10 +14,12 @@ namespace ReferenciaXPayAPI_Core.Controllers
     public class GenerarReferenciaNumericaController : ControllerBase
     {
         private readonly ReferenciaLogic _logic;
+        private readonly QRReaderService _qrService;
 
-        public GenerarReferenciaNumericaController(ReferenciaLogic logic)
+        public GenerarReferenciaNumericaController(ReferenciaLogic logic, QRReaderService qrService)
         {
             _logic = logic;
+            _qrService = qrService;
         }
 
         [HttpPost]
@@ -102,6 +106,114 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 _logic.GrabaLog(ex.ToString(), "err_critico");
                 // ENVÍO EL ERROR CRUDO Y COMPLETO PARA PODER VER QUÉ SE ROMPE EN C#
                 return StatusCode(500, new { code = "500", message = "Error Crítico .NET", detail = ex.ToString() });
+            }
+        }
+
+        [HttpPost("Archivo")]
+        public IActionResult PostArchivo([FromForm] IFormFile documento)
+        {
+            GeneraReferenciaNumericaResponse resp = new GeneraReferenciaNumericaResponse();
+
+            try
+            {
+                if (documento == null || documento.Length == 0)
+                {
+                    _logic.GrabaLog("Sin archivo adjunto", "err");
+                    resp.respcode = "400";
+                    return BadRequest(new { code = "400", message = "El documento es obligatorio" });
+                }
+
+                string qrText = null;
+                var ext = Path.GetExtension(documento.FileName).ToLower();
+
+                using (var stream = documento.OpenReadStream())
+                {
+                    if (ext == ".pdf")
+                    {
+                        qrText = _qrService.ReadQRFromPdf(stream);
+                    }
+                    else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")
+                    {
+                        qrText = _qrService.ReadQRFromImage(stream);
+                    }
+                    else
+                    {
+                        resp.respcode = "400";
+                        return BadRequest(new { code = "400", message = "Formato de archivo no soportado. Sólo PDF, PNG y JPG." });
+                    }
+                }
+
+                if (string.IsNullOrEmpty(qrText))
+                {
+                    resp.respcode = "400";
+                    return BadRequest(new { code = "400", message = "No se pudo detectar un código QR válido en el documento." });
+                }
+
+                _logic.GrabaLog($"QR Detectado desde archivo: {qrText}", "info");
+
+                // Reuse logic to generate reference
+                string cReferencia = qrText;
+                string cRespcode = string.Empty;
+                string cReferenciaNumerica = string.Empty;
+
+                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica);
+
+                if (status == 0)
+                {
+                    DateTime? fechaVigenciaIMSS = null;
+                    double? importeIMSS = null;
+
+                    string regPat = string.Empty;
+                    string perPag = string.Empty;
+                    string origen = string.Empty;
+                    string fsua = string.Empty;
+                    string fechVenc = string.Empty;
+                    string impImss = string.Empty;
+                    string impRcv = string.Empty; 
+                    string impApv = string.Empty;
+                    string impAcv = string.Empty;
+                    
+                    int mRet = _logic.ValidaReferencia(cReferencia, ref cRespcode);
+
+                    if (mRet == 0)
+                    {
+                        _logic.ObtenerCampos(cReferencia, ref regPat, ref perPag, ref origen, ref fsua, ref fechVenc, ref impImss, ref impRcv, ref impApv, ref impAcv);
+
+                        if (DateTime.TryParseExact(fechVenc, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDate))
+                        {
+                            fechaVigenciaIMSS = parsedDate;
+                        }
+
+                        if (double.TryParse(impImss, out double parsedImporte))
+                        {
+                            importeIMSS = parsedImporte;
+                        }
+
+                        resp.respcode = "00";
+                        resp.referenciaNumerica = cReferenciaNumerica;
+                        resp.vigencia = fechaVigenciaIMSS;
+                        resp.monto = importeIMSS;
+                        return Ok(resp);
+                    }
+                    else
+                    {
+                        _logic.GrabaLog($"Validacion local falló ({cRespcode}), pero se entrega referencia de DB desde archivo.", "warn");
+                        resp.respcode = "00"; 
+                        resp.referenciaNumerica = cReferenciaNumerica;
+                        return Ok(resp);
+                    }
+                }
+                else
+                {
+                    resp.respcode = "14";
+                    resp.referenciaNumerica = string.Empty;
+                    return StatusCode(500, new { code = "500", message = "Error en el procesamiento de la base de datos", detail = cRespcode });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logic.GrabaLog(ex.ToString(), "err_critico_archivo");
+                return StatusCode(500, new { code = "500", message = "Error Crítico .NET en PostArchivo", detail = ex.ToString() });
             }
         }
     }

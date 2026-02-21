@@ -13,6 +13,7 @@ builder.Services.AddControllers()
 
 // Register Business Logic
 builder.Services.AddTransient<ReferenciaLogic>();
+builder.Services.AddTransient<QRReaderService>();
 
 // Configure CORS
 builder.Services.AddCors(options =>
