@@ -4,6 +4,8 @@ using ReferenciaXPayAPI_Core.Logic;
 using Newtonsoft.Json;
 using System.Net;
 using System.Globalization;
+using System.IO;
+using Microsoft.AspNetCore.Http;
 
 namespace ReferenciaXPayAPI_Core.Controllers
 {
@@ -12,10 +14,12 @@ namespace ReferenciaXPayAPI_Core.Controllers
     public class GenerarReferenciaNumericaController : ControllerBase
     {
         private readonly ReferenciaLogic _logic;
+        private readonly QRReaderService _qrService;
 
-        public GenerarReferenciaNumericaController(ReferenciaLogic logic)
+        public GenerarReferenciaNumericaController(ReferenciaLogic logic, QRReaderService qrService)
         {
             _logic = logic;
+            _qrService = qrService;
         }
 
         [HttpPost]
@@ -25,34 +29,42 @@ namespace ReferenciaXPayAPI_Core.Controllers
 
             try
             {
-                if (model == null)
+                if (model == null || string.IsNullOrEmpty(model.Referencia))
                 {
                     _logic.GrabaLog("Sin definicion", "err");
-                    resp.Respcode = "14";
-                    return NoContent();
+                    resp.respcode = "400";
+                    return BadRequest(new { code = "400", message = "Referencia es obligatoria" });
                 }
 
                 var jsonReqMessage = JsonConvert.SerializeObject(model);
                 _logic.GrabaLog(jsonReqMessage, "json");
 
                 string cReferencia = model.Referencia;
-                string cRespcode;
-                string cReferenciaNumerica;
+                string cRespcode = string.Empty;
+                string cReferenciaNumerica = string.Empty;
 
-                int status = _logic.GenerarBD(cReferencia, out cRespcode, out cReferenciaNumerica);
+                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica);
 
                 if (status == 0)
                 {
                     DateTime? fechaVigenciaIMSS = null;
                     double? importeIMSS = null;
 
-                    string regPat, perPag, origen, fsua, fechVenc, impImss, impRcv, impApv, impAcv;
+                    string regPat = string.Empty;
+                    string perPag = string.Empty;
+                    string origen = string.Empty;
+                    string fsua = string.Empty;
+                    string fechVenc = string.Empty;
+                    string impImss = string.Empty;
+                    string impRcv = string.Empty; 
+                    string impApv = string.Empty;
+                    string impAcv = string.Empty;
                     
-                    int mRet = _logic.ValidaReferencia(cReferencia, out cRespcode);
+                    int mRet = _logic.ValidaReferencia(cReferencia, ref cRespcode);
 
                     if (mRet == 0)
                     {
-                        _logic.ObtenerCampos(cReferencia, out regPat, out perPag, out origen, out fsua, out fechVenc, out impImss, out impRcv, out impApv, out impAcv);
+                        _logic.ObtenerCampos(cReferencia, ref regPat, ref perPag, ref origen, ref fsua, ref fechVenc, ref impImss, ref impRcv, ref impApv, ref impAcv);
                         _logic.GrabaLog(fechVenc, "Fecha: ");
                         _logic.GrabaLog(impImss, "Importe: ");
 
@@ -65,28 +77,144 @@ namespace ReferenciaXPayAPI_Core.Controllers
                         {
                             importeIMSS = parsedImporte;
                         }
-                    }
 
-                    resp.Respcode = "00";
-                    resp.ReferenciaNumerica = cReferenciaNumerica;
-                    resp.Vigencia = fechaVigenciaIMSS;
-                    resp.Monto = importeIMSS;
+                        resp.respcode = "00";
+                        resp.referenciaNumerica = cReferenciaNumerica;
+                        resp.vigencia = fechaVigenciaIMSS;
+                        resp.monto = importeIMSS;
+                        return Ok(resp);
+                    }
+                    else
+                    {
+                        // La validación local falló, pero la base de datos SÍ generó la referencia numérica.
+                        // Entregamos la referencia pero omitimos los campos calculados (Monto/Vigencia).
+                        _logic.GrabaLog($"Validacion local falló ({cRespcode}), pero se entrega referencia de DB.", "warn");
+                        resp.respcode = "00"; // Forzamos éxito porque la DB lo aceptó
+                        resp.referenciaNumerica = cReferenciaNumerica;
+                        return Ok(resp);
+                    }
                 }
                 else
                 {
-                    resp.Respcode = "14";
-                    resp.ReferenciaNumerica = string.Empty;
+                    resp.respcode = "14";
+                    resp.referenciaNumerica = string.Empty;
+                    return StatusCode(500, new { code = "500", message = "Error en el procesamiento de la base de datos", detail = cRespcode });
                 }
             }
             catch (Exception ex)
             {
-                _logic.GrabaLog(ex.Message, "err");
-                resp.Respcode = "30";
-                resp.ReferenciaNumerica = string.Empty;
-                return BadRequest(resp);
+                _logic.GrabaLog(ex.ToString(), "err_critico");
+                // ENVÍO EL ERROR CRUDO Y COMPLETO PARA PODER VER QUÉ SE ROMPE EN C#
+                return StatusCode(500, new { code = "500", message = "Error Crítico .NET", detail = ex.ToString() });
             }
+        }
 
-            return Ok(resp);
+        [HttpPost("Archivo")]
+        public IActionResult PostArchivo([FromForm] IFormFile documento)
+        {
+            GeneraReferenciaNumericaResponse resp = new GeneraReferenciaNumericaResponse();
+
+            try
+            {
+                if (documento == null || documento.Length == 0)
+                {
+                    _logic.GrabaLog("Sin archivo adjunto", "err");
+                    resp.respcode = "400";
+                    return BadRequest(new { code = "400", message = "El documento es obligatorio" });
+                }
+
+                string qrText = null;
+                var ext = Path.GetExtension(documento.FileName).ToLower();
+
+                using (var stream = documento.OpenReadStream())
+                {
+                    if (ext == ".pdf")
+                    {
+                        qrText = _qrService.ReadCodeFromPdf(stream);
+                    }
+                    else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")
+                    {
+                        qrText = _qrService.ReadCodeFromImage(stream);
+                    }
+                    else
+                    {
+                        resp.respcode = "400";
+                        return BadRequest(new { code = "400", message = "Formato de archivo no soportado. Sólo PDF, PNG y JPG." });
+                    }
+                }
+
+                if (string.IsNullOrEmpty(qrText))
+                {
+                    resp.respcode = "400";
+                    return BadRequest(new { code = "400", message = "No se pudo detectar un código QR o de barras válido en el documento." });
+                }
+
+                _logic.GrabaLog($"Código detectado desde archivo: {qrText}", "info");
+
+                // Reuse logic to generate reference
+                string cReferencia = qrText;
+                string cRespcode = string.Empty;
+                string cReferenciaNumerica = string.Empty;
+
+                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica);
+
+                if (status == 0)
+                {
+                    DateTime? fechaVigenciaIMSS = null;
+                    double? importeIMSS = null;
+
+                    string regPat = string.Empty;
+                    string perPag = string.Empty;
+                    string origen = string.Empty;
+                    string fsua = string.Empty;
+                    string fechVenc = string.Empty;
+                    string impImss = string.Empty;
+                    string impRcv = string.Empty; 
+                    string impApv = string.Empty;
+                    string impAcv = string.Empty;
+                    
+                    int mRet = _logic.ValidaReferencia(cReferencia, ref cRespcode);
+
+                    if (mRet == 0)
+                    {
+                        _logic.ObtenerCampos(cReferencia, ref regPat, ref perPag, ref origen, ref fsua, ref fechVenc, ref impImss, ref impRcv, ref impApv, ref impAcv);
+
+                        if (DateTime.TryParseExact(fechVenc, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDate))
+                        {
+                            fechaVigenciaIMSS = parsedDate;
+                        }
+
+                        if (double.TryParse(impImss, out double parsedImporte))
+                        {
+                            importeIMSS = parsedImporte;
+                        }
+
+                        resp.respcode = "00";
+                        resp.referenciaNumerica = cReferenciaNumerica;
+                        resp.vigencia = fechaVigenciaIMSS;
+                        resp.monto = importeIMSS;
+                        return Ok(resp);
+                    }
+                    else
+                    {
+                        _logic.GrabaLog($"Validacion local falló ({cRespcode}), pero se entrega referencia de DB desde archivo.", "warn");
+                        resp.respcode = "00"; 
+                        resp.referenciaNumerica = cReferenciaNumerica;
+                        return Ok(resp);
+                    }
+                }
+                else
+                {
+                    resp.respcode = "14";
+                    resp.referenciaNumerica = string.Empty;
+                    return StatusCode(500, new { code = "500", message = "Error en el procesamiento de la base de datos", detail = cRespcode });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logic.GrabaLog(ex.ToString(), "err_critico_archivo");
+                return StatusCode(500, new { code = "500", message = "Error Crítico .NET en PostArchivo", detail = ex.ToString() });
+            }
         }
     }
 }
