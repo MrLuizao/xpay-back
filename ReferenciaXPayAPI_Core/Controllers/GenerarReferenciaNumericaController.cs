@@ -130,11 +130,11 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 {
                     if (ext == ".pdf")
                     {
-                        qrText = _qrService.ReadQRFromPdf(stream);
+                        qrText = _qrService.ReadCodeFromPdf(stream);
                     }
                     else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")
                     {
-                        qrText = _qrService.ReadQRFromImage(stream);
+                        qrText = _qrService.ReadCodeFromImage(stream);
                     }
                     else
                     {
@@ -146,10 +146,10 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 if (string.IsNullOrEmpty(qrText))
                 {
                     resp.respcode = "400";
-                    return BadRequest(new { code = "400", message = "No se pudo detectar un código QR válido en el documento." });
+                    return BadRequest(new { code = "400", message = "No se pudo detectar un código QR o de barras válido en el documento." });
                 }
 
-                _logic.GrabaLog($"QR Detectado desde archivo: {qrText}", "info");
+                _logic.GrabaLog($"Código detectado desde archivo: {qrText}", "info");
 
                 // Reuse logic to generate reference
                 string cReferencia = qrText;

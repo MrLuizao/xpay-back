@@ -18,9 +18,10 @@ namespace ReferenciaXPayAPI_Core.Logic
         }
 
         /// <summary>
-        /// Reads a QR code from a stream containing an image (.png, .jpg, etc.)
+        /// Reads a QR code or barcode from a stream containing an image (.png, .jpg, etc.)
+        /// Supported formats: QR, Code 128, Code 39, EAN-13, EAN-8, UPC-A, UPC-E, ITF, Codabar.
         /// </summary>
-        public string ReadQRFromImage(Stream imageStream)
+        public string ReadCodeFromImage(Stream imageStream)
         {
             try
             {
@@ -32,7 +33,18 @@ namespace ReferenciaXPayAPI_Core.Logic
                         Options = new ZXing.Common.DecodingOptions
                         {
                             TryHarder = true,
-                            PossibleFormats = new List<BarcodeFormat> { BarcodeFormat.QR_CODE }
+                            PossibleFormats = new List<BarcodeFormat>
+                            {
+                                BarcodeFormat.QR_CODE,
+                                BarcodeFormat.CODE_128,
+                                BarcodeFormat.CODE_39,
+                                BarcodeFormat.EAN_13,
+                                BarcodeFormat.EAN_8,
+                                BarcodeFormat.UPC_A,
+                                BarcodeFormat.UPC_E,
+                                BarcodeFormat.ITF,
+                                BarcodeFormat.CODABAR
+                            }
                         }
                     };
 
@@ -42,16 +54,16 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
             catch (Exception)
             {
-                // Return null if it fails to decode an image or finds no QR
+                // Return null if it fails to decode an image or finds no code
                 return null;
             }
         }
 
         /// <summary>
-        /// Renders each page of a PDF as an image and scans for QR codes.
+        /// Renders each page of a PDF as an image and scans for QR codes or barcodes.
         /// Falls back to extracting embedded images if rendering fails.
         /// </summary>
-        public string ReadQRFromPdf(Stream pdfStream)
+        public string ReadCodeFromPdf(Stream pdfStream)
         {
             // Copy the stream to a byte array so we can reuse it for fallback
             byte[] pdfBytes;
@@ -70,14 +82,14 @@ namespace ReferenciaXPayAPI_Core.Logic
                 {
                     try
                     {
-                        // Render the page at 300 DPI for good QR readability
+                        // Render the page at 300 DPI for good QR/barcode readability
                         var renderOptions = new RenderOptions(Dpi: 300);
                         using (var pngStream = new MemoryStream())
                         {
                             Conversion.SavePng(pngStream, pdfBytes, null, i, renderOptions);
                             pngStream.Position = 0;
 
-                            string qrText = ReadQRFromImage(pngStream);
+                            string qrText = ReadCodeFromImage(pngStream);
                             if (!string.IsNullOrEmpty(qrText))
                             {
                                 return qrText;
@@ -113,7 +125,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                                 {
                                     using (var ms = new MemoryStream(pngBytes2))
                                     {
-                                        string qrText = ReadQRFromImage(ms);
+                                        string qrText = ReadCodeFromImage(ms);
                                         if (!string.IsNullOrEmpty(qrText))
                                         {
                                             return qrText;
@@ -135,7 +147,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                 return null;
             }
 
-            return null; // No QR found with either strategy
+            return null; // No QR or barcode found with either strategy
         }
     }
 }
