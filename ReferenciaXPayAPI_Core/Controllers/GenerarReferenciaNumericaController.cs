@@ -66,20 +66,24 @@ namespace ReferenciaXPayAPI_Core.Controllers
                     {
                         _logic.ObtenerCampos(cReferencia, ref regPat, ref perPag, ref origen, ref fsua, ref fechVenc, ref impImss, ref impRcv, ref impApv, ref impAcv);
                         _logic.GrabaLog(fechVenc, "Fecha: ");
-                        _logic.GrabaLog(impImss, "Importe: ");
+                        _logic.GrabaLog($"{impImss} | {impRcv} | {impApv} | {impAcv}", "Importes Extraídos: ");
 
                         if (DateTime.TryParseExact(fechVenc, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDate))
                         {
                             fechaVigenciaIMSS = parsedDate;
                         }
 
-                        if (double.TryParse(impImss, out double parsedImporte))
-                        {
-                            importeIMSS = parsedImporte;
-                        }
+                        // Sumamos todos los componentes y dividimos entre 100 para corregir decimales
+                        double.TryParse(impImss, NumberStyles.Any, CultureInfo.InvariantCulture, out double dImss);
+                        double.TryParse(impRcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dRcv);
+                        double.TryParse(impApv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dApv);
+                        double.TryParse(impAcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dAcv);
+                        
+                        importeIMSS = (dImss + dRcv + dApv + dAcv);
 
                         resp.respcode = "00";
                         resp.referenciaNumerica = cReferenciaNumerica;
+                        resp.referenciaXPay = cReferencia;
                         resp.vigencia = fechaVigenciaIMSS;
                         resp.monto = importeIMSS;
                         return Ok(resp);
@@ -91,6 +95,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
                         _logic.GrabaLog($"Validacion local falló ({cRespcode}), pero se entrega referencia de DB.", "warn");
                         resp.respcode = "00"; // Forzamos éxito porque la DB lo aceptó
                         resp.referenciaNumerica = cReferenciaNumerica;
+                        resp.referenciaXPay = cReferencia;
                         return Ok(resp);
                     }
                 }
@@ -184,13 +189,17 @@ namespace ReferenciaXPayAPI_Core.Controllers
                             fechaVigenciaIMSS = parsedDate;
                         }
 
-                        if (double.TryParse(impImss, out double parsedImporte))
-                        {
-                            importeIMSS = parsedImporte;
-                        }
+                        // Sumamos todos los componentes
+                        double.TryParse(impImss, NumberStyles.Any, CultureInfo.InvariantCulture, out double dImss);
+                        double.TryParse(impRcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dRcv);
+                        double.TryParse(impApv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dApv);
+                        double.TryParse(impAcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dAcv);
+                        
+                        importeIMSS = (dImss + dRcv + dApv + dAcv);
 
                         resp.respcode = "00";
                         resp.referenciaNumerica = cReferenciaNumerica;
+                        resp.referenciaXPay = qrText;
                         resp.vigencia = fechaVigenciaIMSS;
                         resp.monto = importeIMSS;
                         return Ok(resp);
@@ -200,6 +209,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
                         _logic.GrabaLog($"Validacion local falló ({cRespcode}), pero se entrega referencia de DB desde archivo.", "warn");
                         resp.respcode = "00"; 
                         resp.referenciaNumerica = cReferenciaNumerica;
+                        resp.referenciaXPay = qrText;
                         return Ok(resp);
                     }
                 }

@@ -320,10 +320,10 @@ namespace ReferenciaXPayAPI_Core.Logic
             origen = Base36aBase10(referencia.Substring(12, 1)).ToString();
             fsua = Base36aBase10(referencia.Substring(13, 4)).ToString();
             fechVenc = GetFechaVenc(referencia.Substring(17, 4));
-            impImss = Base36aBase10(referencia.Substring(21, 7)).ToString();
-            impRcv = Base36aBase10(referencia.Substring(28, 7)).ToString();
-            impApv = Base36aBase10(referencia.Substring(35, 7)).ToString();
-            impAcv = Base36aBase10(referencia.Substring(42, 7)).ToString();
+            impImss = (Convert.ToDecimal(Base36aBase10(referencia.Substring(21, 7))) / 100m).ToString();
+            impRcv = (Convert.ToDecimal(Base36aBase10(referencia.Substring(28, 7))) / 100m).ToString();
+            impApv = (Convert.ToDecimal(Base36aBase10(referencia.Substring(35, 7))) / 100m).ToString();
+            impAcv = (Convert.ToDecimal(Base36aBase10(referencia.Substring(42, 7))) / 100m).ToString();
         }
 
         private long Base36aBase10(string base36)
@@ -507,6 +507,84 @@ namespace ReferenciaXPayAPI_Core.Logic
             {
                 resp.Code = "500";
                 resp.Message = "Error interno: " + ex.Message;
+            }
+            return resp;
+        }
+
+        public ApiResponse<List<HistorialRecibosModel>> ObtenerHistorialRecibos()
+        {
+            ApiResponse<List<HistorialRecibosModel>> resp = new ApiResponse<List<HistorialRecibosModel>> 
+            { 
+                Code = "99", 
+                Message = "Error Desconocido",
+                Data = new List<HistorialRecibosModel>()
+            };
+
+            using (SqlConnection conn = new SqlConnection(_connectionReferencias))
+            {
+                using (SqlCommand sqlComando = new SqlCommand("dbo.HistorialRecibos_Get", conn))
+                {
+                    try
+                    {
+                        sqlComando.CommandType = CommandType.StoredProcedure;
+                        
+                        conn.Open();
+
+                        using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
+                        {
+                            bool success = false;
+                            string respcode = "";
+                            string desccode = "";
+                            
+                            if (sqlReader.HasRows && sqlReader.Read())
+                            {
+                                respcode = sqlReader["RESPCODE"]?.ToString() ?? "";
+                                desccode = sqlReader["DESCCODE"]?.ToString() ?? "";
+                            }
+                            
+                            if (sqlReader.NextResult() && sqlReader.HasRows)
+                            {
+                                var list = new List<HistorialRecibosModel>();
+                                while (sqlReader.Read())
+                                {
+                                    list.Add(new HistorialRecibosModel
+                                    {
+                                        Id = Convert.ToInt64(sqlReader["ID"]),
+                                        Servicio = sqlReader["Servicio"]?.ToString() ?? "",
+                                        ReferenciaNumerica = sqlReader["ReferenciaNumerica"]?.ToString() ?? "",
+                                        Importe = sqlReader["IMPORTE"] != DBNull.Value ? Convert.ToDouble(sqlReader["IMPORTE"]) : 0,
+                                        Vigencia = sqlReader["Vigencia"]?.ToString() ?? "",
+                                        Estatus = sqlReader["Estatus"]?.ToString() ?? ""
+                                    });
+                                }
+                                resp.Data = list;
+                                success = true;
+                            }
+                            else if (respcode == "00" && !sqlReader.HasRows)
+                            {
+                                // Retorno exitoso pero vacío, está bien
+                                success = true;
+                            }
+                            
+                            if (respcode == "00" || respcode == "OK" || success)
+                            {
+                                resp.Code = "success";
+                                resp.Message = "Consulta exitosa";
+                            }
+                            else
+                            {
+                                resp.Code = "404";
+                                resp.Message = "Error al consultar registros";
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        GrabaLog("Error en ObtenerHistorialRecibos: " + ex.Message, "HistorialRecibos_Get");
+                        resp.Code = "500";
+                        resp.Message = ex.Message;
+                    }
+                }
             }
             return resp;
         }

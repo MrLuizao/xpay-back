@@ -11,6 +11,7 @@ namespace ReferenciaXPayAPI_Core.Models
     {
         public string respcode { get; set; } = string.Empty;
         public string referenciaNumerica { get; set; } = string.Empty;
+        public string? referenciaXPay { get; set; }
         public DateTime? vigencia { get; set; }
         public double? monto { get; set; }
     }
