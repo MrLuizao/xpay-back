@@ -1,4 +1,5 @@
 using ReferenciaXPayAPI_Core.Logic;
+using ReferenciaXPayAPI_Core.Models;
 using Newtonsoft.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,7 @@ builder.Services.AddControllers()
 // Register Business Logic
 builder.Services.AddTransient<ReferenciaLogic>();
 builder.Services.AddTransient<QRReaderService>();
+builder.Services.AddTransient<CamposIMSSLogic>();
 
 // Configure CORS
 builder.Services.AddCors(options =>
