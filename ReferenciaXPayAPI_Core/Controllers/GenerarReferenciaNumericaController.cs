@@ -43,7 +43,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 string cRespcode = string.Empty;
                 string cReferenciaNumerica = string.Empty;
 
-                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica);
+                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica, model.UsuarioXPayId ?? "");
 
                 if (status == 0)
                 {
@@ -114,8 +114,14 @@ namespace ReferenciaXPayAPI_Core.Controllers
             }
         }
 
+        /// <summary>
+        /// Genera una referencia numérica a partir de un archivo QR o código de barras
+        /// </summary>
+        /// <param name="documento">Archivo PDF o imagen con código QR</param>
+        /// <param name="usuarioXPayId">ID del usuario que genera la referencia</param>
+        /// <returns>Referencia numérica generada</returns>
         [HttpPost("Archivo")]
-        public IActionResult PostArchivo([FromForm] IFormFile documento)
+        public IActionResult PostArchivo([FromForm] IFormFile documento, [FromQuery] string usuarioXPayId = "")
         {
             GeneraReferenciaNumericaResponse resp = new GeneraReferenciaNumericaResponse();
 
@@ -161,7 +167,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 string cRespcode = string.Empty;
                 string cReferenciaNumerica = string.Empty;
 
-                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica);
+                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica, usuarioXPayId);
 
                 if (status == 0)
                 {

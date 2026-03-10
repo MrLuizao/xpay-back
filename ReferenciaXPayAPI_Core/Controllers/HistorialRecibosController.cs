@@ -16,9 +16,9 @@ namespace ReferenciaXPayAPI_Core.Controllers
         }
 
         [HttpGet]
-        public IActionResult Get()
+        public IActionResult Get([FromQuery] string usuarioXPayId = "")
         {
-            var response = _logic.ObtenerHistorialRecibos();
+            var response = _logic.ObtenerHistorialRecibos(usuarioXPayId);
 
             if (response.Code == "success")
             {

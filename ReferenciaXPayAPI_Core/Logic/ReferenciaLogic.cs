@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using System.IO;
 using System.Text;
 using System.Globalization;
+using System.Linq;
 using ReferenciaXPayAPI_Core.Models;
 
 //api-estandar-restful
@@ -68,7 +69,7 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
         }
 
-        public int GenerarBD(string referencia, ref string respcode, ref string referenciaNumerica)
+        public int GenerarBD(string referencia, ref string respcode, ref string referenciaNumerica, string usuarioXPayId = "")
         {
             respcode = string.Empty;
             referenciaNumerica = string.Empty;
@@ -81,6 +82,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                     {
                         sqlComando.CommandType = CommandType.StoredProcedure;
                         sqlComando.Parameters.AddWithValue("@Referencia", referencia);
+                        sqlComando.Parameters.AddWithValue("@UsuarioXPayId", string.IsNullOrEmpty(usuarioXPayId) ? (object)DBNull.Value : usuarioXPayId);
                         conn.Open();
 
                         using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
@@ -475,7 +477,8 @@ namespace ReferenciaXPayAPI_Core.Logic
                                         Apellido = rd["Apellido"].ToString(),
                                         Email = rd["Email"].ToString(),
                                         Celular = rd["Celular"].ToString() ?? string.Empty,
-                                        RolXPayId = Convert.ToInt32(rd["RolXPayId"])
+                                        RolXPayId = Convert.ToInt32(rd["RolXPayId"]),
+                                        UsuarioXPayId = TryGetUsuarioXPayId(rd)
                                     };
                                 }
                                 else if (resultCode == "02") // Role mismatch (but user valid)
@@ -485,7 +488,8 @@ namespace ReferenciaXPayAPI_Core.Logic
                                     resp.Data = new UsuarioModel
                                     {
                                         UserId = rd["UserId"].ToString() ?? string.Empty,
-                                        RolXPayId = Convert.ToInt32(rd["RolXPayId"])
+                                        RolXPayId = Convert.ToInt32(rd["RolXPayId"]),
+                                        UsuarioXPayId = TryGetUsuarioXPayId(rd)
                                     };
                                 }
                                 else
@@ -511,7 +515,79 @@ namespace ReferenciaXPayAPI_Core.Logic
             return resp;
         }
 
-        public ApiResponse<List<HistorialRecibosModel>> ObtenerHistorialRecibos()
+        private int? TryGetUsuarioXPayId(SqlDataReader rd)
+        {
+            try
+            {
+                // Primero intentar obtenerlo directamente del store
+                if (rd["UsuarioXPayId"] != DBNull.Value)
+                {
+                    return Convert.ToInt32(rd["UsuarioXPayId"]);
+                }
+                
+                // Si no está, buscarlo en la tabla de usuarios usando el UserId
+                string userId = rd["UserId"]?.ToString();
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    return GetUsuarioXPayIdByUserId(userId);
+                }
+                
+                GrabaLog("Columna UsuarioXPayId no encontrada y UserId vacío", "LoginUsuario_Warning");
+                return null;
+            }
+            catch (IndexOutOfRangeException)
+            {
+                // Si no existe la columna, intentar buscar por UserId
+                try
+                {
+                    string userId = rd["UserId"]?.ToString();
+                    if (!string.IsNullOrEmpty(userId))
+                    {
+                        return GetUsuarioXPayIdByUserId(userId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    GrabaLog("Error obteniendo UsuarioXPayId por UserId: " + ex.Message, "LoginUsuario_Error");
+                }
+                
+                GrabaLog("Columna UsuarioXPayId no encontrada. Columnas disponibles: " + string.Join(", ", Enumerable.Range(0, rd.FieldCount).Select(i => rd.GetName(i))), "LoginUsuario_Error");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                GrabaLog("Error obteniendo UsuarioXPayId: " + ex.Message, "LoginUsuario_Error");
+                return null;
+            }
+        }
+
+        private int? GetUsuarioXPayIdByUserId(string userId)
+        {
+            try
+            {
+                using (SqlConnection conn = new SqlConnection(_connectionUsuarios))
+                {
+                    using (SqlCommand cmd = new SqlCommand("SELECT UsuarioXPayId FROM UsuarioXPay WHERE UserId = @UserId", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@UserId", userId);
+                        conn.Open();
+                        
+                        object result = cmd.ExecuteScalar();
+                        if (result != null && result != DBNull.Value)
+                        {
+                            return Convert.ToInt32(result);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GrabaLog("Error consultando UsuarioXPayId por UserId: " + ex.Message, "LoginUsuario_Error");
+            }
+            return null;
+        }
+
+        public ApiResponse<List<HistorialRecibosModel>> ObtenerHistorialRecibos(string usuarioXPayId = "")
         {
             ApiResponse<List<HistorialRecibosModel>> resp = new ApiResponse<List<HistorialRecibosModel>> 
             { 
@@ -527,6 +603,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                     try
                     {
                         sqlComando.CommandType = CommandType.StoredProcedure;
+                        sqlComando.Parameters.AddWithValue("@UsuarioXPayId", usuarioXPayId ?? (object)DBNull.Value);
                         
                         conn.Open();
 
@@ -554,7 +631,8 @@ namespace ReferenciaXPayAPI_Core.Logic
                                         ReferenciaNumerica = sqlReader["ReferenciaNumerica"]?.ToString() ?? "",
                                         Importe = sqlReader["IMPORTE"] != DBNull.Value ? Convert.ToDouble(sqlReader["IMPORTE"]) : 0,
                                         Vigencia = sqlReader["Vigencia"]?.ToString() ?? "",
-                                        Estatus = sqlReader["Estatus"]?.ToString() ?? ""
+                                        Estatus = sqlReader["Estatus"]?.ToString() ?? "",
+                                        ReferenciaXPay = sqlReader["ReferenciaXPay"]?.ToString() ?? ""
                                     });
                                 }
                                 resp.Data = list;

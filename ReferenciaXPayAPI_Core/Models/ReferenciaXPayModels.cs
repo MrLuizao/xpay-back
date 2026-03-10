@@ -5,6 +5,7 @@ namespace ReferenciaXPayAPI_Core.Models
     public class GeneraReferenciaNumericaModel
     {
         public string Referencia { get; set; } = string.Empty;
+        public string? UsuarioXPayId { get; set; }
     }
 
     public class GeneraReferenciaNumericaResponse
@@ -42,6 +43,7 @@ namespace ReferenciaXPayAPI_Core.Models
         public string? Nombre { get; set; }
         public string? Apellido { get; set; }
         public string? Email { get; set; }
+        public int? UsuarioXPayId { get; set; }
     }
 
     public class UsuarioUpdateModel
