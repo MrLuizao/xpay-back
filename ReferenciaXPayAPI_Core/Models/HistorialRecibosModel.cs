@@ -8,5 +8,6 @@ namespace ReferenciaXPayAPI_Core.Models
         public double Importe { get; set; }
         public string Vigencia { get; set; } = string.Empty;
         public string Estatus { get; set; } = string.Empty;
+        public string ReferenciaXPay { get; set; } = string.Empty;
     }
 }
