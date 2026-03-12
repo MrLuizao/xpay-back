@@ -3,12 +3,14 @@ using ReferenciaXPayAPI_Core.Models;
 using ReferenciaXPayAPI_Core.Logic;
 using Newtonsoft.Json;
 using System.IO;
+using ReferenciaXPayAPI_Core.Filters;
 
 namespace ReferenciaXPayAPI_Core.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
+    [RequireAuthentication]
     public class CamposIMSSController : ControllerBase
     {
         private readonly CamposIMSSLogic _camposLogic;

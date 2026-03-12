@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ReferenciaXPayAPI_Core.Models;
 using ReferenciaXPayAPI_Core.Logic;
+using ReferenciaXPayAPI_Core.Services;
 
 namespace ReferenciaXPayAPI_Core.Controllers
 {
@@ -9,10 +10,12 @@ namespace ReferenciaXPayAPI_Core.Controllers
     public class UsuariosController : ControllerBase
     {
         private readonly ReferenciaLogic _logic;
+        private readonly IJwtService _jwtService;
 
-        public UsuariosController(ReferenciaLogic logic)
+        public UsuariosController(ReferenciaLogic logic, IJwtService jwtService)
         {
             _logic = logic;
+            _jwtService = jwtService;
         }
 
         [HttpPost]
@@ -91,9 +94,25 @@ namespace ReferenciaXPayAPI_Core.Controllers
 
             ApiResponse<UsuarioModel> resp = _logic.LoginUsuario(model);
 
+            if (resp.Code == "success" && resp.Data != null)
+            {
+                // Generar token JWT
+                var token = _jwtService.GenerateToken(resp.Data);
+                
+                // Retornar respuesta con token incluido
+                return Ok(new 
+                {
+                    code = resp.Code,
+                    message = resp.Message,
+                    token = token,
+                    tokenType = "Bearer",
+                    expiresIn = 86400, // 24 horas
+                    data = resp.Data
+                });
+            }
+
             return resp.Code switch
             {
-                "success" => Ok(resp),
                 "401" => Unauthorized(resp),
                 "403" => StatusCode(403, resp),
                 "500" => StatusCode(500, resp),

@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using ReferenciaXPayAPI_Core.Logic;
 using ReferenciaXPayAPI_Core.Models;
+using ReferenciaXPayAPI_Core.Filters;
 
 namespace ReferenciaXPayAPI_Core.Controllers
 {
     [ApiController]
     [Route("[controller]")]
+    [RequireAuthentication]
     public class HistorialRecibosController : ControllerBase
     {
         private readonly ReferenciaLogic _logic;
