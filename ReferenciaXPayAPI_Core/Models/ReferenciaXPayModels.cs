@@ -70,4 +70,17 @@ namespace ReferenciaXPayAPI_Core.Models
         public string Message { get; set; } = string.Empty; // e.g. "Success", "Created"
         public T? Data { get; set; }
     }
+
+    public class RegistrarPagoModel
+    {
+        public string NumeroTransaccion { get; set; } = string.Empty;
+        public double Importe { get; set; }
+        public string? UsuarioXPayId { get; set; }
+    }
+
+    public class RegistrarPagoData
+    {
+        public string ReferenciaNumerica { get; set; } = string.Empty;
+        public string Estatus { get; set; } = string.Empty; // "Pagada"
+    }
 }
