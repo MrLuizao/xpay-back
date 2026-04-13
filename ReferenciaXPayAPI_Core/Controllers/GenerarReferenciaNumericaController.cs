@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using ReferenciaXPayAPI_Core.Models;
 using ReferenciaXPayAPI_Core.Logic;
 using Newtonsoft.Json;
-using System.Net;
+using ReferenciaXPayAPI_Core.Filters;
 using System.Globalization;
 using System.IO;
 using Microsoft.AspNetCore.Http;
@@ -11,6 +11,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
 {
     [ApiController]
     [Route("[controller]")]
+    [RequireAuthentication]
     public class GenerarReferenciaNumericaController : ControllerBase
     {
         private readonly ReferenciaLogic _logic;
