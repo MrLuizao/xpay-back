@@ -11,7 +11,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    [RequireAuthentication]
+    
     public class GenerarReferenciaNumericaController : ControllerBase
     {
         private readonly ReferenciaLogic _logic;

@@ -7,7 +7,7 @@ using System;
 namespace ReferenciaXPayAPI_Core.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("api/[controller]")]
     [RequireAuthentication]
     public class RegistrarPagoController : ControllerBase
     {

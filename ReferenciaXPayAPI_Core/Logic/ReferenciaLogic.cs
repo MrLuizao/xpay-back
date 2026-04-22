@@ -677,12 +677,12 @@ namespace ReferenciaXPayAPI_Core.Logic
 
             using (SqlConnection conn = new SqlConnection(_connectionReferencias))
             {
-                using (SqlCommand sqlComando = new SqlCommand("dbo.ReferenciaNumericaXPay_RegistrarPago", conn))
+                using (SqlCommand sqlComando = new SqlCommand("dbo.ReferenciaNumericaXPay_InsertarPago", conn))
                 {
                     try
                     {
                         sqlComando.CommandType = CommandType.StoredProcedure;
-                        sqlComando.Parameters.AddWithValue("@NumeroTransaccion", model.NumeroTransaccion);
+                        sqlComando.Parameters.AddWithValue("@IDS_NUM_STANDIN", model.NumeroTransaccion);
                         sqlComando.Parameters.AddWithValue("@Importe", model.Importe);
                         sqlComando.Parameters.AddWithValue("@UsuarioXPayId", string.IsNullOrEmpty(model.UsuarioXPayId) ? (object)DBNull.Value : model.UsuarioXPayId);
                         
@@ -717,7 +717,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                                             success = true;
                                         }
 
-                                        GrabaLog($"RespCode: {respcode}, RefNum: {referenciaNumerica}", "ReferenciaNumericaXPay_RegistrarPago");
+                                        GrabaLog($"RespCode: {respcode}, RefNum: {referenciaNumerica}", "ReferenciaNumericaXPay_InsertarPago");
                                     }
                                 }
                             } while (sqlReader.NextResult());
