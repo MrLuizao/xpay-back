@@ -666,5 +666,83 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
             return resp;
         }
+        public ApiResponse<RegistrarPagoData> RegistrarPago(RegistrarPagoModel model)
+        {
+            ApiResponse<RegistrarPagoData> resp = new ApiResponse<RegistrarPagoData> 
+            { 
+                Code = "99", 
+                Message = "Error Desconocido",
+                Data = null
+            };
+
+            using (SqlConnection conn = new SqlConnection(_connectionReferencias))
+            {
+                using (SqlCommand sqlComando = new SqlCommand("dbo.ReferenciaNumericaXPay_InsertarPago", conn))
+                {
+                    try
+                    {
+                        sqlComando.CommandType = CommandType.StoredProcedure;
+                        sqlComando.Parameters.AddWithValue("@IDS_NUM_STANDIN", model.NumeroTransaccion);
+                        sqlComando.Parameters.AddWithValue("@Importe", model.Importe);
+                        sqlComando.Parameters.AddWithValue("@UsuarioXPayId", string.IsNullOrEmpty(model.UsuarioXPayId) ? (object)DBNull.Value : model.UsuarioXPayId);
+                        
+                        conn.Open();
+
+                        using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
+                        {
+                            bool success = false;
+                            string respcode = "99";
+                            string desccode = "Error al procesar";
+                            string referenciaNumerica = string.Empty;
+                            
+                            do
+                            {
+                                if (sqlReader.HasRows)
+                                {
+                                    while (sqlReader.Read())
+                                    {
+                                        respcode = sqlReader["RESPCODE"]?.ToString() ?? "99";
+                                        
+                                        try { desccode = sqlReader["DESCCODE"]?.ToString() ?? "Error"; } catch { }
+
+                                        if (respcode == "00" || respcode == "OK")
+                                        {
+                                            try { referenciaNumerica = sqlReader["ReferenciaFinal"]?.ToString() ?? string.Empty; } catch { }
+                                            
+                                            resp.Data = new RegistrarPagoData
+                                            {
+                                                ReferenciaNumerica = referenciaNumerica,
+                                                Estatus = "Pagada"
+                                            };
+                                            success = true;
+                                        }
+
+                                        GrabaLog($"RespCode: {respcode}, RefNum: {referenciaNumerica}", "ReferenciaNumericaXPay_InsertarPago");
+                                    }
+                                }
+                            } while (sqlReader.NextResult());
+
+                            if (success || respcode == "00")
+                            {
+                                resp.Code = "success";
+                                resp.Message = "Pago registrado exitosamente";
+                            }
+                            else
+                            {
+                                resp.Code = respcode != "00" ? respcode : "14";
+                                resp.Message = desccode;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        GrabaLog("Error en RegistrarPago: " + ex.Message, "RegistrarPago");
+                        resp.Code = "500";
+                        resp.Message = ex.Message;
+                    }
+                }
+            }
+            return resp;
+        }
     }
 }
