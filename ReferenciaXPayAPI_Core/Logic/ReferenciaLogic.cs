@@ -624,15 +624,35 @@ namespace ReferenciaXPayAPI_Core.Logic
                                 var list = new List<HistorialRecibosModel>();
                                 while (sqlReader.Read())
                                 {
+                                    int? servicioIdValue = null;
+                                    int? sucursalIdValue = null;
+                                    string fechaPagoValue = "";
+                                    string folioTransaccionValue = "";
+
+                                    try 
+                                    {
+                                        if (sqlReader["servicioId"] != DBNull.Value)
+                                            servicioIdValue = Convert.ToInt32(sqlReader["servicioId"]);
+                                    } 
+                                    catch { }
+
+                                    try { if (sqlReader["SucursalId"] != DBNull.Value) sucursalIdValue = Convert.ToInt32(sqlReader["SucursalId"]); } catch { }
+                                    try { if (sqlReader["FechaPago"] != DBNull.Value) fechaPagoValue = sqlReader["FechaPago"].ToString() ?? ""; } catch { }
+                                    try { if (sqlReader["FolioTransaccion"] != DBNull.Value) folioTransaccionValue = sqlReader["FolioTransaccion"].ToString() ?? ""; } catch { }
+
                                     list.Add(new HistorialRecibosModel
                                     {
                                         Id = Convert.ToInt64(sqlReader["ID"]),
+                                        servicioId = servicioIdValue,
                                         Servicio = sqlReader["Servicio"]?.ToString() ?? "",
                                         ReferenciaNumerica = sqlReader["ReferenciaNumerica"]?.ToString() ?? "",
                                         Importe = sqlReader["IMPORTE"] != DBNull.Value ? Convert.ToDouble(sqlReader["IMPORTE"]) : 0,
                                         Vigencia = sqlReader["Vigencia"]?.ToString() ?? "",
                                         Estatus = sqlReader["Estatus"]?.ToString() ?? "",
-                                        ReferenciaXPay = sqlReader["ReferenciaXPay"]?.ToString() ?? ""
+                                        ReferenciaXPay = sqlReader["ReferenciaXPay"]?.ToString() ?? "",
+                                        FechaPago = fechaPagoValue,
+                                        SucursalId = sucursalIdValue,
+                                        FolioTransaccion = folioTransaccionValue
                                     });
                                 }
                                 resp.Data = list;
