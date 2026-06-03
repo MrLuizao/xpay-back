@@ -764,5 +764,125 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
             return resp;
         }
+
+        public ApiResponse<ValidarReferenciaResponseModel> ValidarReferencia(string referencia)
+        {
+            ApiResponse<ValidarReferenciaResponseModel> resp = new ApiResponse<ValidarReferenciaResponseModel>
+            {
+                Code = "99",
+                Message = "Error Desconocido"
+            };
+
+            try
+            {
+                if (string.IsNullOrEmpty(referencia))
+                {
+                    resp.Code = "400";
+                    resp.Message = "Referencia es obligatoria";
+                    return resp;
+                }
+
+                GrabaLog($"Validando referencia: {referencia}", "ValidarReferencia");
+
+                if (referencia.Length == 53)
+                {
+                    // IMSS Path - Reutilizando lógica existente de CamposIMSSLogic
+                    var camposLogic = new CamposIMSSLogic(this);
+                    var response = camposLogic.ProcesarReferencia(referencia);
+
+                    if (response.RespCode != "00")
+                    {
+                        resp.Code = response.RespCode;
+                        resp.Message = response.Message;
+                        return resp;
+                    }
+
+                    resp.Code = "success";
+                    resp.Message = "Referencia válida";
+                    resp.Data = new ValidarReferenciaResponseModel
+                    {
+                        IdEmisor = "0000",
+                        ImporteAbierto = 0,
+                        ImporteAPagar = response.Campos.ImpTotal
+                    };
+                }
+                else
+                {
+                    // XPAY Path (uses SQL stored procedure)
+                    using (SqlConnection conn = new SqlConnection(_connectionReferencias))
+                    {
+                        using (SqlCommand cmd = new SqlCommand("dbo.VALIDA_LC_XCD_PAY", conn))
+                        {
+                            cmd.CommandType = CommandType.StoredProcedure;
+                            cmd.Parameters.AddWithValue("@Referencia", referencia);
+                            
+                            conn.Open();
+
+                            string dbRespCode = "99";
+                            string dbDescCode = "Error al validar";
+                            string idEmisor = string.Empty;
+
+                            using (SqlDataReader reader = cmd.ExecuteReader())
+                            {
+                                if (reader.Read())
+                                {
+                                    dbRespCode = reader["RESPCODE"]?.ToString() ?? "99";
+                                    dbDescCode = reader["DESCCODE"]?.ToString() ?? "Error";
+                                    idEmisor = reader["EMISOR"]?.ToString() ?? string.Empty;
+                                }
+                            }
+
+                            if (dbRespCode != "00")
+                            {
+                                resp.Code = dbRespCode;
+                                resp.Message = !string.IsNullOrEmpty(dbDescCode) ? dbDescCode : "Referencia inválida";
+                                return resp;
+                            }
+
+                            // Mock de ImporteAbierto según el emisor devuelto (evitando crear una tabla física)
+                            int importeAbierto = 0;
+                            if (idEmisor == "1005")
+                            {
+                                importeAbierto = 1; // 1 = Sí (importe abierto)
+                            }
+
+                            decimal importeAPagar = 0;
+                            if (importeAbierto == 0)
+                            {
+                                // Mock platform query: returns RESPCODE = "00" and Importe = 20.00
+                                string platformRespCode = "00"; // Mock default
+                                if (platformRespCode == "00")
+                                {
+                                    importeAPagar = 20.00m; // Mock default 20.00
+                                }
+                                else
+                                {
+                                    resp.Code = "99";
+                                    resp.Message = "No se pudo consultar";
+                                    return resp;
+                                }
+                            }
+
+                            resp.Code = "success";
+                            resp.Message = "Referencia válida";
+                            resp.Data = new ValidarReferenciaResponseModel
+                            {
+                                IdEmisor = idEmisor,
+                                ImporteAbierto = importeAbierto,
+                                ImporteAPagar = importeAPagar
+                            };
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GrabaLog($"Error en ValidarReferencia: {ex.Message}", "ValidarReferencia_Error");
+                resp.Code = "500";
+                resp.Message = $"Error interno: {ex.Message}";
+            }
+
+            return resp;
+        }
     }
 }
