@@ -624,7 +624,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                                 var list = new List<HistorialRecibosModel>();
                                 while (sqlReader.Read())
                                 {
-                                    int? servicioIdValue = null;
+                                    string servicioIdValue = "";
                                     int? sucursalIdValue = null;
                                     string fechaPagoValue = "";
                                     string folioTransaccionValue = "";
@@ -632,7 +632,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                                     try 
                                     {
                                         if (sqlReader["servicioId"] != DBNull.Value)
-                                            servicioIdValue = Convert.ToInt32(sqlReader["servicioId"]);
+                                            servicioIdValue = sqlReader["servicioId"]?.ToString() ?? "";
                                     } 
                                     catch { }
 

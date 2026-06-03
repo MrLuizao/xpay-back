@@ -3,7 +3,7 @@ namespace ReferenciaXPayAPI_Core.Models
     public class HistorialRecibosModel
     {
         public long Id { get; set; }
-        public int? servicioId { get; set; }
+        public string servicioId { get; set; } = string.Empty;
         public string Servicio { get; set; } = string.Empty;
         public string ReferenciaNumerica { get; set; } = string.Empty;
         public double Importe { get; set; }
