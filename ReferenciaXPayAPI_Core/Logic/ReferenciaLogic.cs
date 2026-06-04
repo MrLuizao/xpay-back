@@ -784,29 +784,10 @@ namespace ReferenciaXPayAPI_Core.Logic
 
                 GrabaLog($"Validando referencia: {referencia}", "ValidarReferencia");
 
-                if (referencia.Length == 53)
-                {
-                    // IMSS Path - Reutilizando lógica existente de CamposIMSSLogic
-                    var camposLogic = new CamposIMSSLogic(this);
-                    var response = camposLogic.ProcesarReferencia(referencia);
+                // Determinar tipo de referencia
+                bool esPrimeros7Numericos = referencia.Length >= 7 && referencia.Substring(0, 7).All(char.IsDigit);
 
-                    if (response.RespCode != "00")
-                    {
-                        resp.Code = response.RespCode;
-                        resp.Message = response.Message;
-                        return resp;
-                    }
-
-                    resp.Code = "success";
-                    resp.Message = "Referencia válida";
-                    resp.Data = new ValidarReferenciaResponseModel
-                    {
-                        IdEmisor = "0000",
-                        ImporteAbierto = 0,
-                        ImporteAPagar = response.Campos.ImpTotal
-                    };
-                }
-                else
+                if (esPrimeros7Numericos)
                 {
                     // XPAY Path (uses SQL stored procedure)
                     using (SqlConnection conn = new SqlConnection(_connectionReferencias))
@@ -819,16 +800,29 @@ namespace ReferenciaXPayAPI_Core.Logic
                             conn.Open();
 
                             string dbRespCode = "99";
-                            string dbDescCode = "Error al validar";
+                            string dbDescCode = string.Empty;
                             string idEmisor = string.Empty;
 
                             using (SqlDataReader reader = cmd.ExecuteReader())
                             {
                                 if (reader.Read())
                                 {
-                                    dbRespCode = reader["RESPCODE"]?.ToString() ?? "99";
-                                    dbDescCode = reader["DESCCODE"]?.ToString() ?? "Error";
-                                    idEmisor = reader["EMISOR"]?.ToString() ?? string.Empty;
+                                    for (int i = 0; i < reader.FieldCount; i++)
+                                    {
+                                        string colName = reader.GetName(i);
+                                        if (colName.Equals("RESPCODE", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            dbRespCode = reader[i]?.ToString() ?? "99";
+                                        }
+                                        else if (colName.Equals("DESCCODE", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            dbDescCode = reader[i]?.ToString() ?? "Error";
+                                        }
+                                        else if (colName.Equals("EMISOR", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            idEmisor = reader[i]?.ToString() ?? string.Empty;
+                                        }
+                                    }
                                 }
                             }
 
@@ -839,11 +833,36 @@ namespace ReferenciaXPayAPI_Core.Logic
                                 return resp;
                             }
 
-                            // Mock de ImporteAbierto según el emisor devuelto (evitando crear una tabla física)
+                            // Obtener ImporteAbierto desde la base de datos usando el SP ObtenerImporteAbiertoEmisor_Get
                             int importeAbierto = 0;
-                            if (idEmisor == "1005")
+                            try
                             {
-                                importeAbierto = 1; // 1 = Sí (importe abierto)
+                                using (SqlCommand cmdAbierto = new SqlCommand("dbo.ObtenerImporteAbiertoEmisor_Get", conn))
+                                {
+                                    cmdAbierto.CommandType = CommandType.StoredProcedure;
+                                    cmdAbierto.Parameters.AddWithValue("@EmisorID", idEmisor);
+
+                                    using (SqlDataReader readerAbierto = cmdAbierto.ExecuteReader())
+                                    {
+                                        if (readerAbierto.Read())
+                                        {
+                                            for (int i = 0; i < readerAbierto.FieldCount; i++)
+                                            {
+                                                string colName = readerAbierto.GetName(i);
+                                                if (colName.Equals("ImporteAbierto", StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    string val = readerAbierto[i]?.ToString() ?? "0";
+                                                    int.TryParse(val, out importeAbierto);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                GrabaLog($"Emisor {idEmisor} consultado en ObtenerImporteAbiertoEmisor_Get. ImporteAbierto = {importeAbierto}", "ValidarReferencia");
+                            }
+                            catch (Exception ex)
+                            {
+                                GrabaLog($"Error al consultar ObtenerImporteAbiertoEmisor_Get para emisor {idEmisor}: {ex.Message}", "ValidarReferencia_ObtenerImporteAbierto_Error");
                             }
 
                             decimal importeAPagar = 0;
@@ -873,6 +892,35 @@ namespace ReferenciaXPayAPI_Core.Logic
                             };
                         }
                     }
+                }
+                else if (referencia.Length == 53)
+                {
+                    // IMSS Path - Reutilizando lógica existente de CamposIMSSLogic
+                    var camposLogic = new CamposIMSSLogic(this);
+                    var response = camposLogic.ProcesarReferencia(referencia);
+
+                    if (response.RespCode != "00")
+                    {
+                        resp.Code = response.RespCode;
+                        resp.Message = response.Message;
+                        return resp;
+                    }
+
+                    resp.Code = "success";
+                    resp.Message = "Referencia válida";
+                    resp.Data = new ValidarReferenciaResponseModel
+                    {
+                        IdEmisor = "0000",
+                        ImporteAbierto = 0,
+                        ImporteAPagar = response.Campos.ImpTotal
+                    };
+                }
+                else
+                {
+                    // Referencia desconocida
+                    resp.Code = "99";
+                    resp.Message = "Referencia desconocida";
+                    return resp;
                 }
             }
             catch (Exception ex)
