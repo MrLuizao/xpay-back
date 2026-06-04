@@ -69,7 +69,7 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
         }
 
-        public int GenerarBD(string referencia, ref string respcode, ref string referenciaNumerica, string usuarioXPayId = "")
+        public int GenerarBD(string referencia, ref string respcode, ref string referenciaNumerica, string usuarioXPayId = "", decimal? importe = null)
         {
             respcode = string.Empty;
             referenciaNumerica = string.Empty;
@@ -83,6 +83,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                         sqlComando.CommandType = CommandType.StoredProcedure;
                         sqlComando.Parameters.AddWithValue("@Referencia", referencia);
                         sqlComando.Parameters.AddWithValue("@UsuarioXPayId", string.IsNullOrEmpty(usuarioXPayId) ? (object)DBNull.Value : usuarioXPayId);
+                        sqlComando.Parameters.AddWithValue("@Importe", importe.HasValue ? (object)importe.Value : DBNull.Value);
                         conn.Open();
 
                         using (SqlDataReader sqlReader = sqlComando.ExecuteReader())

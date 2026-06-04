@@ -6,6 +6,7 @@ namespace ReferenciaXPayAPI_Core.Models
     {
         public string Referencia { get; set; } = string.Empty;
         public string? UsuarioXPayId { get; set; }
+        public decimal? Importe { get; set; }
     }
 
     public class GeneraReferenciaNumericaResponse

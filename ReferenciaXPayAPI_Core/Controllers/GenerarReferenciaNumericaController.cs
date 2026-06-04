@@ -44,25 +44,23 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 string cRespcode = string.Empty;
                 string cReferenciaNumerica = string.Empty;
 
-                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica, model.UsuarioXPayId ?? "");
+                // Calcular importe antes de llamar al SP
+                decimal? importeCalculado = model.Importe;
+                DateTime? fechaVigenciaIMSS = null;
+                string regPat = string.Empty;
+                string perPag = string.Empty;
+                string origen = string.Empty;
+                string fsua = string.Empty;
+                string fechVenc = string.Empty;
+                string impImss = string.Empty;
+                string impRcv = string.Empty; 
+                string impApv = string.Empty;
+                string impAcv = string.Empty;
 
-                if (status == 0)
+                // Si no se proporcionó importe, calcularlo de la referencia
+                if (!importeCalculado.HasValue)
                 {
-                    DateTime? fechaVigenciaIMSS = null;
-                    double? importeIMSS = null;
-
-                    string regPat = string.Empty;
-                    string perPag = string.Empty;
-                    string origen = string.Empty;
-                    string fsua = string.Empty;
-                    string fechVenc = string.Empty;
-                    string impImss = string.Empty;
-                    string impRcv = string.Empty; 
-                    string impApv = string.Empty;
-                    string impAcv = string.Empty;
-                    
                     int mRet = _logic.ValidaReferencia(cReferencia, ref cRespcode);
-
                     if (mRet == 0)
                     {
                         _logic.ObtenerCampos(cReferencia, ref regPat, ref perPag, ref origen, ref fsua, ref fechVenc, ref impImss, ref impRcv, ref impApv, ref impAcv);
@@ -74,31 +72,28 @@ namespace ReferenciaXPayAPI_Core.Controllers
                             fechaVigenciaIMSS = parsedDate;
                         }
 
-                        // Sumamos todos los componentes y dividimos entre 100 para corregir decimales
+                        // Sumamos todos los componentes
                         double.TryParse(impImss, NumberStyles.Any, CultureInfo.InvariantCulture, out double dImss);
                         double.TryParse(impRcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dRcv);
                         double.TryParse(impApv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dApv);
                         double.TryParse(impAcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dAcv);
                         
-                        importeIMSS = (dImss + dRcv + dApv + dAcv);
+                        importeCalculado = (decimal)(dImss + dRcv + dApv + dAcv);
+                    }
+                }
 
-                        resp.respcode = "00";
-                        resp.referenciaNumerica = cReferenciaNumerica;
-                        resp.referenciaXPay = cReferencia;
-                        resp.vigencia = fechaVigenciaIMSS;
-                        resp.monto = importeIMSS;
-                        return Ok(resp);
-                    }
-                    else
-                    {
-                        // La validación local falló, pero la base de datos SÍ generó la referencia numérica.
-                        // Entregamos la referencia pero omitimos los campos calculados (Monto/Vigencia).
-                        _logic.GrabaLog($"Validacion local falló ({cRespcode}), pero se entrega referencia de DB.", "warn");
-                        resp.respcode = "00"; // Forzamos éxito porque la DB lo aceptó
-                        resp.referenciaNumerica = cReferenciaNumerica;
-                        resp.referenciaXPay = cReferencia;
-                        return Ok(resp);
-                    }
+                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica, model.UsuarioXPayId ?? "", importeCalculado);
+
+                if (status == 0)
+                {
+                    double? importeIMSS = importeCalculado.HasValue ? (double)importeCalculado.Value : null;
+
+                    resp.respcode = "00";
+                    resp.referenciaNumerica = cReferenciaNumerica;
+                    resp.referenciaXPay = cReferencia;
+                    resp.vigencia = fechaVigenciaIMSS;
+                    resp.monto = importeIMSS;
+                    return Ok(resp);
                 }
                 else
                 {
@@ -168,57 +163,50 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 string cRespcode = string.Empty;
                 string cReferenciaNumerica = string.Empty;
 
-                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica, usuarioXPayId);
+                // Calcular importe antes de llamar al SP
+                DateTime? fechaVigenciaIMSS = null;
+                string regPat = string.Empty;
+                string perPag = string.Empty;
+                string origen = string.Empty;
+                string fsua = string.Empty;
+                string fechVenc = string.Empty;
+                string impImss = string.Empty;
+                string impRcv = string.Empty;
+                string impApv = string.Empty;
+                string impAcv = string.Empty;
+                decimal? importeCalculado = null;
+
+                int mRet = _logic.ValidaReferencia(cReferencia, ref cRespcode);
+                if (mRet == 0)
+                {
+                    _logic.ObtenerCampos(cReferencia, ref regPat, ref perPag, ref origen, ref fsua, ref fechVenc, ref impImss, ref impRcv, ref impApv, ref impAcv);
+
+                    if (DateTime.TryParseExact(fechVenc, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDate))
+                    {
+                        fechaVigenciaIMSS = parsedDate;
+                    }
+
+                    // Sumamos todos los componentes
+                    double.TryParse(impImss, NumberStyles.Any, CultureInfo.InvariantCulture, out double dImss);
+                    double.TryParse(impRcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dRcv);
+                    double.TryParse(impApv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dApv);
+                    double.TryParse(impAcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dAcv);
+
+                    importeCalculado = (decimal)(dImss + dRcv + dApv + dAcv);
+                }
+
+                int status = _logic.GenerarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica, usuarioXPayId, importeCalculado);
 
                 if (status == 0)
                 {
-                    DateTime? fechaVigenciaIMSS = null;
-                    double? importeIMSS = null;
+                    double? importeIMSS = importeCalculado.HasValue ? (double)importeCalculado.Value : null;
 
-                    string regPat = string.Empty;
-                    string perPag = string.Empty;
-                    string origen = string.Empty;
-                    string fsua = string.Empty;
-                    string fechVenc = string.Empty;
-                    string impImss = string.Empty;
-                    string impRcv = string.Empty; 
-                    string impApv = string.Empty;
-                    string impAcv = string.Empty;
-                    
-                    int mRet = _logic.ValidaReferencia(cReferencia, ref cRespcode);
-
-                    if (mRet == 0)
-                    {
-                        _logic.ObtenerCampos(cReferencia, ref regPat, ref perPag, ref origen, ref fsua, ref fechVenc, ref impImss, ref impRcv, ref impApv, ref impAcv);
-
-                        if (DateTime.TryParseExact(fechVenc, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDate))
-                        {
-                            fechaVigenciaIMSS = parsedDate;
-                        }
-
-                        // Sumamos todos los componentes
-                        double.TryParse(impImss, NumberStyles.Any, CultureInfo.InvariantCulture, out double dImss);
-                        double.TryParse(impRcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dRcv);
-                        double.TryParse(impApv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dApv);
-                        double.TryParse(impAcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dAcv);
-                        
-                        importeIMSS = (dImss + dRcv + dApv + dAcv);
-
-                        resp.respcode = "00";
-                        resp.referenciaNumerica = cReferenciaNumerica;
-                        resp.referenciaXPay = qrText;
-                        resp.vigencia = fechaVigenciaIMSS;
-                        resp.monto = importeIMSS;
-                        return Ok(resp);
-                    }
-                    else
-                    {
-                        _logic.GrabaLog($"Validacion local falló ({cRespcode}), pero se entrega referencia de DB desde archivo.", "warn");
-                        resp.respcode = "00"; 
-                        resp.referenciaNumerica = cReferenciaNumerica;
-                        resp.referenciaXPay = qrText;
-                        return Ok(resp);
-                    }
+                    resp.respcode = "00";
+                    resp.referenciaNumerica = cReferenciaNumerica;
+                    resp.referenciaXPay = qrText;
+                    resp.vigencia = fechaVigenciaIMSS;
+                    resp.monto = importeIMSS;
+                    return Ok(resp);
                 }
                 else
                 {
