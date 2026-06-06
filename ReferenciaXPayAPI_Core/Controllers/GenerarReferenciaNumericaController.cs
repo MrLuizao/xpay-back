@@ -110,6 +110,10 @@ namespace ReferenciaXPayAPI_Core.Controllers
             }
         }
 
+        /*
+        // HISTÓRICO: Generación completa desde archivo (integrada en un solo paso)
+        // Fecha deprecación: Jun 2026
+        // Reemplazada por flujo separado: ExtraerArchivo -> ValidarReferencia -> GenerarReferenciaNumerica
         /// <summary>
         /// Genera una referencia numérica a partir de un archivo QR o código de barras
         /// </summary>
@@ -158,12 +162,10 @@ namespace ReferenciaXPayAPI_Core.Controllers
 
                 _logic.GrabaLog($"Código detectado desde archivo: {qrText}", "info");
 
-                // Reuse logic to generate reference
                 string cReferencia = qrText;
                 string cRespcode = string.Empty;
                 string cReferenciaNumerica = string.Empty;
 
-                // Calcular importe antes de llamar al SP
                 DateTime? fechaVigenciaIMSS = null;
                 string regPat = string.Empty;
                 string perPag = string.Empty;
@@ -186,7 +188,6 @@ namespace ReferenciaXPayAPI_Core.Controllers
                         fechaVigenciaIMSS = parsedDate;
                     }
 
-                    // Sumamos todos los componentes
                     double.TryParse(impImss, NumberStyles.Any, CultureInfo.InvariantCulture, out double dImss);
                     double.TryParse(impRcv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dRcv);
                     double.TryParse(impApv, NumberStyles.Any, CultureInfo.InvariantCulture, out double dApv);
@@ -214,6 +215,58 @@ namespace ReferenciaXPayAPI_Core.Controllers
                     resp.referenciaNumerica = string.Empty;
                     return StatusCode(500, new { code = "500", message = "Error en el procesamiento de la base de datos", detail = cRespcode });
                 }
+            }
+            catch (Exception ex)
+            {
+                _logic.GrabaLog(ex.ToString(), "err_critico_archivo");
+                return StatusCode(500, new { code = "500", message = "Error Crítico .NET en PostArchivo", detail = ex.ToString() });
+            }
+        }
+        */
+
+        /// <summary>
+        /// Extrae el código QR o de barras de un archivo PDF o imagen
+        /// </summary>
+        /// <param name="documento">Archivo PDF o imagen con código QR</param>
+        /// <returns>Texto del código QR o de barras extraído</returns>
+        [HttpPost("Archivo")]
+        public IActionResult PostArchivo([FromForm] IFormFile documento)
+        {
+            try
+            {
+                if (documento == null || documento.Length == 0)
+                {
+                    _logic.GrabaLog("Sin archivo adjunto", "err");
+                    return BadRequest(new { code = "400", message = "El documento es obligatorio" });
+                }
+
+                string qrText = null;
+                var ext = Path.GetExtension(documento.FileName).ToLower();
+
+                using (var stream = documento.OpenReadStream())
+                {
+                    if (ext == ".pdf")
+                    {
+                        qrText = _qrService.ReadCodeFromPdf(stream);
+                    }
+                    else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")
+                    {
+                        qrText = _qrService.ReadCodeFromImage(stream);
+                    }
+                    else
+                    {
+                        return BadRequest(new { code = "400", message = "Formato de archivo no soportado. Sólo PDF, PNG y JPG." });
+                    }
+                }
+
+                if (string.IsNullOrEmpty(qrText))
+                {
+                    return BadRequest(new { code = "400", message = "No se pudo detectar un código QR o de barras válido en el documento." });
+                }
+
+                _logic.GrabaLog($"Código detectado desde archivo: {qrText}", "info");
+
+                return Ok(new { code = "success", referencia = qrText });
             }
             catch (Exception ex)
             {
