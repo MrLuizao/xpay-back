@@ -14,7 +14,7 @@ namespace ReferenciaXPayAPI_Core.Logic
             _referenciaLogic = referenciaLogic;
         }
 
-        public ReferenciaResponse ProcesarReferencia(string referencia)
+        public ReferenciaResponse ProcesarReferencia(string referencia, int? comercioId = null, int? sucursalId = null)
         {
             var response = new ReferenciaResponse
             {
@@ -38,6 +38,12 @@ namespace ReferenciaXPayAPI_Core.Logic
                 // Obtener campos
                 var campos = ObtenerCampos(referencia);
                 response.Campos = campos;
+
+                // Obtener encabezado de ticket si se proporcionaron comercioId y sucursalId
+                if (comercioId.HasValue && sucursalId.HasValue)
+                {
+                    response.Encabezado = _referenciaLogic.ObtenerEncabezadoTicket(comercioId.Value, sucursalId.Value);
+                }
 
                 // Generar ticket
                 response.Ticket = GenerarTicket(campos);

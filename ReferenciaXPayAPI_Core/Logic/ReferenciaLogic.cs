@@ -629,6 +629,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                                     int? sucursalIdValue = null;
                                     string fechaPagoValue = "";
                                     string folioTransaccionValue = "";
+                                    int? comercioIdValue = null;
 
                                     try 
                                     {
@@ -640,6 +641,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                                     try { if (sqlReader["SucursalId"] != DBNull.Value) sucursalIdValue = Convert.ToInt32(sqlReader["SucursalId"]); } catch { }
                                     try { if (sqlReader["FechaPago"] != DBNull.Value) fechaPagoValue = sqlReader["FechaPago"].ToString() ?? ""; } catch { }
                                     try { if (sqlReader["FolioTransaccion"] != DBNull.Value) folioTransaccionValue = sqlReader["FolioTransaccion"].ToString() ?? ""; } catch { }
+                                    try { if (sqlReader["comercioId"] != DBNull.Value) comercioIdValue = Convert.ToInt32(sqlReader["comercioId"]); } catch { }
 
                                     list.Add(new HistorialRecibosModel
                                     {
@@ -653,7 +655,8 @@ namespace ReferenciaXPayAPI_Core.Logic
                                         ReferenciaXPay = sqlReader["ReferenciaXPay"]?.ToString() ?? "",
                                         FechaPago = fechaPagoValue,
                                         SucursalId = sucursalIdValue,
-                                        FolioTransaccion = folioTransaccionValue
+                                        FolioTransaccion = folioTransaccionValue,
+                                        ComercioId = comercioIdValue
                                     });
                                 }
                                 resp.Data = list;
@@ -932,6 +935,74 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
 
             return resp;
+        }
+        public EncabezadoTicketModel? ObtenerEncabezadoTicket(int comercioId, int sucursalId)
+        {
+            GrabaLog($"ObtenerEncabezadoTicket llamado con comercioId={comercioId}, sucursalId={sucursalId}", "EncabezadoTicket");
+            try
+            {
+                using (SqlConnection conn = new SqlConnection(_connectionReferencias))
+                using (SqlCommand cmd = new SqlCommand("dbo.EncabezadoTicketCadenaSucursalXPay_Get", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@ID_NUM_CTECORP", comercioId);
+                    cmd.Parameters.AddWithValue("@ID_NUM_UNCTE", sucursalId);
+
+                    conn.Open();
+
+                    using (SqlDataReader rd = cmd.ExecuteReader())
+                    {
+                        int resultSetIndex = 0;
+                        do
+                        {
+                            resultSetIndex++;
+                            GrabaLog($"EncabezadoTicket: procesando result set #{resultSetIndex}", "EncabezadoTicket");
+
+                            if (!rd.HasRows)
+                            {
+                                GrabaLog($"EncabezadoTicket: result set #{resultSetIndex} sin filas", "EncabezadoTicket");
+                                continue;
+                            }
+
+                            // Loguear columnas disponibles en este result set
+                            var columnas = Enumerable.Range(0, rd.FieldCount).Select(i => rd.GetName(i));
+                            GrabaLog($"EncabezadoTicket: columnas en result set #{resultSetIndex}: {string.Join(", ", columnas)}", "EncabezadoTicket");
+
+                            while (rd.Read())
+                            {
+                                // Si es el result set de control (RESPCODE), loguearlo y continuar al siguiente
+                                bool esResultControl = false;
+                                try { var rc = rd["RESPCODE"]; esResultControl = true; } catch { }
+
+                                if (esResultControl)
+                                {
+                                    string respcode = rd["RESPCODE"]?.ToString() ?? "";
+                                    string desccode = "";
+                                    try { desccode = rd["DESCCODE"]?.ToString() ?? ""; } catch { }
+                                    GrabaLog($"EncabezadoTicket: result set control → RESPCODE={respcode}, DESCCODE={desccode}", "EncabezadoTicket");
+                                    break; // pasar al NextResult
+                                }
+
+                                // Es el result set de datos
+                                var enc = new EncabezadoTicketModel();
+                                try { enc.Nombre    = rd["Nombre"]?.ToString()    ?? ""; } catch { }
+                                try { enc.Direccion = rd["Direccion"]?.ToString() ?? ""; } catch { }
+                                try { enc.RFC       = rd["RFC"]?.ToString()       ?? ""; } catch { }
+                                GrabaLog($"EncabezadoTicket: datos obtenidos → Nombre={enc.Nombre}, RFC={enc.RFC}", "EncabezadoTicket");
+                                return enc;
+                            }
+                        }
+                        while (rd.NextResult());
+
+                        GrabaLog("EncabezadoTicket: ningún result set devolvió datos de encabezado", "EncabezadoTicket_Warning");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GrabaLog($"Error en ObtenerEncabezadoTicket (comercio={comercioId}, sucursal={sucursalId}): {ex.Message}", "EncabezadoTicket_Error");
+            }
+            return null;
         }
     }
 }

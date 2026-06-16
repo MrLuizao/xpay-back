@@ -20,6 +20,15 @@ namespace ReferenciaXPayAPI_Core.Models
     public class ReferenciaRequest
     {
         public string Referencia { get; set; } = string.Empty;
+        public int? ComercioId { get; set; }
+        public int? SucursalId { get; set; }
+    }
+
+    public class EncabezadoTicketModel
+    {
+        public string Nombre { get; set; } = string.Empty;
+        public string Direccion { get; set; } = string.Empty;
+        public string RFC { get; set; } = string.Empty;
     }
 
     public class ReferenciaResponse
@@ -28,5 +37,6 @@ namespace ReferenciaXPayAPI_Core.Models
         public string Ticket { get; set; } = string.Empty;
         public string RespCode { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
+        public EncabezadoTicketModel? Encabezado { get; set; }
     }
 }

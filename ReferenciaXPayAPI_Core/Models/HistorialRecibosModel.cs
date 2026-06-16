@@ -13,5 +13,6 @@ namespace ReferenciaXPayAPI_Core.Models
         public string FechaPago { get; set; } = string.Empty;
         public int? SucursalId { get; set; }
         public string FolioTransaccion { get; set; } = string.Empty;
+        public int? ComercioId { get; set; }
     }
 }
