@@ -6,6 +6,7 @@ namespace ReferenciaXPayAPI_Core.Models
     {
         public string Referencia { get; set; } = string.Empty;
         public string? UsuarioXPayId { get; set; }
+        public decimal? Importe { get; set; }
     }
 
     public class GeneraReferenciaNumericaResponse
@@ -82,5 +83,17 @@ namespace ReferenciaXPayAPI_Core.Models
     {
         public string ReferenciaNumerica { get; set; } = string.Empty;
         public string Estatus { get; set; } = string.Empty; // "Pagada"
+    }
+
+    public class ValidarReferenciaRequestModel
+    {
+        public string Referencia { get; set; } = string.Empty;
+    }
+
+    public class ValidarReferenciaResponseModel
+    {
+        public string IdEmisor { get; set; } = string.Empty;
+        public int ImporteAbierto { get; set; } // 0 = No, 1 = Sí
+        public decimal ImporteAPagar { get; set; }
     }
 }

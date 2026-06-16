@@ -39,35 +39,39 @@ namespace ReferenciaXPayAPI.Controllers
                 string cRespcode = String.Empty;
                 string cReferenciaNumerica = String.Empty;
 
-                int status = oProceso.generarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica);
+                // Calcular importe antes de llamar al SP
+                decimal? importeCalculado = model.Importe;
+                DateTime? fechaVigenciaIMSS = null;
+                string RegPat = "";
+                string PerPag = "";
+                string Origen = "";
+                string FSUA = "";
+                string FechVenc = "";
+                string ImpImss = "";
+                string ImpRCV = "";
+                string ImpAPV = "";
+                string ImpACV = "";
+                int mRet = 0;
 
-                if (status == 0)
+                // Si no se proporcionó importe, calcularlo de la referencia
+                if (!importeCalculado.HasValue)
                 {
-                    //Revisar si es IMSS para obtener vigencia e importe 
-                    DateTime? fechaVigenciaIMSS = null;
-                    double? importeIMSS = null;
-                    string RegPat = "";
-                    string PerPag = "";
-                    string Origen = "";
-                    string FSUA = "";
-                    string FechVenc = "";
-                    string ImpImss = "";
-                    string ImpRCV = "";
-                    string ImpAPV = "";
-                    string ImpACV = "";
-                    int mRet = 0;
-                    //string XX = "";
-
                     mRet = oProceso.ValidaReferencia(cReferencia, ref cRespcode);
-
                     if (mRet == 0)
                     {
                         oProceso.ObtenerCampos(cReferencia, ref RegPat, ref PerPag, ref Origen, ref FSUA, ref FechVenc, ref ImpImss, ref ImpRCV, ref ImpAPV, ref ImpACV);
                         GrabaLog(FechVenc, "Fecha: ");
                         GrabaLog(ImpImss, "Importe: ");
                         fechaVigenciaIMSS = DateTime.ParseExact(FechVenc, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
-                        importeIMSS = Convert.ToDouble(ImpImss);
+                        importeCalculado = Convert.ToDecimal(ImpImss);
                     }
+                }
+
+                int status = oProceso.generarBD(cReferencia, ref cRespcode, ref cReferenciaNumerica, importeCalculado);
+
+                if (status == 0)
+                {
+                    double? importeIMSS = importeCalculado.HasValue ? (double)importeCalculado.Value : null;
 
                     resp.respcode = "00";
                     resp.referenciaNumerica = cReferenciaNumerica;

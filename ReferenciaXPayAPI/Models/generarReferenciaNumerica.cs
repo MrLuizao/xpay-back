@@ -13,7 +13,7 @@ namespace ReferenciaXPayAPI.Models
     public class generarReferenciaNumerica
     {
 
-        public int generarBD(string referencia, ref string respcode, ref string referenciaNumerica)
+        public int generarBD(string referencia, ref string respcode, ref string referenciaNumerica, decimal? importe = null)
         {
             SqlConnection conn = new SqlConnection();
             SqlCommand SQLComando = new SqlCommand();
@@ -47,6 +47,7 @@ namespace ReferenciaXPayAPI.Models
                 SQLComando.CommandType = CommandType.StoredProcedure;
                 SQLComando.CommandText = "ReferenciaNumericaXPay_Generar";
                 SQLComando.Parameters.AddWithValue("@Referencia", referencia);
+                SQLComando.Parameters.AddWithValue("@Importe", importe.HasValue ? (object)importe.Value : DBNull.Value);
                 SQLComando.Connection.Open();
 
                 using (SqlDataReader sqlReader = SQLComando.ExecuteReader())
@@ -317,6 +318,7 @@ namespace ReferenciaXPayAPI.Models
     public class generaReferenciaNumericaModel
     {
         public string referencia { get; set; }
+        public decimal? Importe { get; set; }
     }
 
     public class generaReferenciaNumericaResponse

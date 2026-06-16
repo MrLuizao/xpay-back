@@ -69,7 +69,7 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
         }
 
-        public int GenerarBD(string referencia, ref string respcode, ref string referenciaNumerica, string usuarioXPayId = "")
+        public int GenerarBD(string referencia, ref string respcode, ref string referenciaNumerica, string usuarioXPayId = "", decimal? importe = null)
         {
             respcode = string.Empty;
             referenciaNumerica = string.Empty;
@@ -83,6 +83,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                         sqlComando.CommandType = CommandType.StoredProcedure;
                         sqlComando.Parameters.AddWithValue("@Referencia", referencia);
                         sqlComando.Parameters.AddWithValue("@UsuarioXPayId", string.IsNullOrEmpty(usuarioXPayId) ? (object)DBNull.Value : usuarioXPayId);
+                        sqlComando.Parameters.AddWithValue("@Importe", importe.HasValue ? (object)importe.Value : DBNull.Value);
                         conn.Open();
 
                         using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
@@ -762,6 +763,174 @@ namespace ReferenciaXPayAPI_Core.Logic
                     }
                 }
             }
+            return resp;
+        }
+
+        public ApiResponse<ValidarReferenciaResponseModel> ValidarReferencia(string referencia)
+        {
+            ApiResponse<ValidarReferenciaResponseModel> resp = new ApiResponse<ValidarReferenciaResponseModel>
+            {
+                Code = "99",
+                Message = "Error Desconocido"
+            };
+
+            try
+            {
+                if (string.IsNullOrEmpty(referencia))
+                {
+                    resp.Code = "400";
+                    resp.Message = "Referencia es obligatoria";
+                    return resp;
+                }
+
+                GrabaLog($"Validando referencia: {referencia}", "ValidarReferencia");
+
+                // Determinar tipo de referencia
+                bool esPrimeros7Numericos = referencia.Length >= 7 && referencia.Substring(0, 7).All(char.IsDigit);
+
+                if (esPrimeros7Numericos)
+                {
+                    // XPAY Path (uses SQL stored procedure)
+                    using (SqlConnection conn = new SqlConnection(_connectionReferencias))
+                    {
+                        using (SqlCommand cmd = new SqlCommand("dbo.VALIDA_LC_XCD_PAY", conn))
+                        {
+                            cmd.CommandType = CommandType.StoredProcedure;
+                            cmd.Parameters.AddWithValue("@Referencia", referencia);
+                            
+                            conn.Open();
+
+                            string dbRespCode = "99";
+                            string dbDescCode = string.Empty;
+                            string idEmisor = string.Empty;
+
+                            using (SqlDataReader reader = cmd.ExecuteReader())
+                            {
+                                if (reader.Read())
+                                {
+                                    for (int i = 0; i < reader.FieldCount; i++)
+                                    {
+                                        string colName = reader.GetName(i);
+                                        if (colName.Equals("RESPCODE", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            dbRespCode = reader[i]?.ToString() ?? "99";
+                                        }
+                                        else if (colName.Equals("DESCCODE", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            dbDescCode = reader[i]?.ToString() ?? "Error";
+                                        }
+                                        else if (colName.Equals("EMISOR", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            idEmisor = reader[i]?.ToString() ?? string.Empty;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (dbRespCode != "00")
+                            {
+                                resp.Code = dbRespCode;
+                                resp.Message = !string.IsNullOrEmpty(dbDescCode) ? dbDescCode : "Referencia inválida";
+                                return resp;
+                            }
+
+                            // Obtener ImporteAbierto desde la base de datos usando el SP ObtenerImporteAbiertoEmisor_Get
+                            int importeAbierto = 0;
+                            try
+                            {
+                                using (SqlCommand cmdAbierto = new SqlCommand("dbo.ObtenerImporteAbiertoEmisor_Get", conn))
+                                {
+                                    cmdAbierto.CommandType = CommandType.StoredProcedure;
+                                    cmdAbierto.Parameters.AddWithValue("@EmisorID", idEmisor);
+
+                                    using (SqlDataReader readerAbierto = cmdAbierto.ExecuteReader())
+                                    {
+                                        if (readerAbierto.Read())
+                                        {
+                                            for (int i = 0; i < readerAbierto.FieldCount; i++)
+                                            {
+                                                string colName = readerAbierto.GetName(i);
+                                                if (colName.Equals("ImporteAbierto", StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    string val = readerAbierto[i]?.ToString() ?? "0";
+                                                    int.TryParse(val, out importeAbierto);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                GrabaLog($"Emisor {idEmisor} consultado en ObtenerImporteAbiertoEmisor_Get. ImporteAbierto = {importeAbierto}", "ValidarReferencia");
+                            }
+                            catch (Exception ex)
+                            {
+                                GrabaLog($"Error al consultar ObtenerImporteAbiertoEmisor_Get para emisor {idEmisor}: {ex.Message}", "ValidarReferencia_ObtenerImporteAbierto_Error");
+                            }
+
+                            decimal importeAPagar = 0;
+                            if (importeAbierto == 0)
+                            {
+                                // Mock platform query: returns RESPCODE = "00" and Importe = 20.00
+                                string platformRespCode = "00"; // Mock default
+                                if (platformRespCode == "00")
+                                {
+                                    importeAPagar = 20.00m; // Mock default 20.00
+                                }
+                                else
+                                {
+                                    resp.Code = "99";
+                                    resp.Message = "No se pudo consultar";
+                                    return resp;
+                                }
+                            }
+
+                            resp.Code = "success";
+                            resp.Message = "Referencia válida";
+                            resp.Data = new ValidarReferenciaResponseModel
+                            {
+                                IdEmisor = idEmisor,
+                                ImporteAbierto = importeAbierto,
+                                ImporteAPagar = importeAPagar
+                            };
+                        }
+                    }
+                }
+                else if (referencia.Length == 53)
+                {
+                    // IMSS Path - Reutilizando lógica existente de CamposIMSSLogic
+                    var camposLogic = new CamposIMSSLogic(this);
+                    var response = camposLogic.ProcesarReferencia(referencia);
+
+                    if (response.RespCode != "00")
+                    {
+                        resp.Code = response.RespCode;
+                        resp.Message = response.Message;
+                        return resp;
+                    }
+
+                    resp.Code = "success";
+                    resp.Message = "Referencia válida";
+                    resp.Data = new ValidarReferenciaResponseModel
+                    {
+                        IdEmisor = "0000",
+                        ImporteAbierto = 0,
+                        ImporteAPagar = response.Campos.ImpTotal
+                    };
+                }
+                else
+                {
+                    // Referencia desconocida
+                    resp.Code = "99";
+                    resp.Message = "Referencia desconocida";
+                    return resp;
+                }
+            }
+            catch (Exception ex)
+            {
+                GrabaLog($"Error en ValidarReferencia: {ex.Message}", "ValidarReferencia_Error");
+                resp.Code = "500";
+                resp.Message = $"Error interno: {ex.Message}";
+            }
+
             return resp;
         }
     }
