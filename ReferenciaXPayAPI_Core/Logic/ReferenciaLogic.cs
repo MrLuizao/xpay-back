@@ -7,6 +7,9 @@ using System.IO;
 using System.Text;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
+using System.Xml;
+using System.Threading.Tasks;
 using ReferenciaXPayAPI_Core.Models;
 
 //api-estandar-restful
@@ -28,6 +31,8 @@ namespace ReferenciaXPayAPI_Core.Logic
         private readonly string _connectionReferencias;
         private readonly string _connectionUsuarios;
         private readonly string _logPath;
+        private readonly string _soapUrl;
+        private readonly HttpClient _httpClient;
 
         public ReferenciaLogic(IConfiguration configuration)
         {
@@ -35,6 +40,13 @@ namespace ReferenciaXPayAPI_Core.Logic
             _connectionReferencias = _configuration.GetValue<string>("BD_Referencias") ?? string.Empty;
             _connectionUsuarios = _configuration.GetValue<string>("BD_Usuarios") ?? string.Empty;
             _logPath = _configuration.GetValue<string>("LogFiles") ?? string.Empty;
+
+            bool usePruebas = _configuration.GetValue<bool>("SOAP:UsePruebas", true);
+            _soapUrl = usePruebas 
+                ? _configuration.GetValue<string>("SOAP:UrlPruebas") ?? string.Empty
+                : _configuration.GetValue<string>("SOAP:UrlProduccion") ?? string.Empty;
+
+            _httpClient = new HttpClient();
         }
 
         public void GrabaLog(string text, string flag)
@@ -872,16 +884,94 @@ namespace ReferenciaXPayAPI_Core.Logic
                             decimal importeAPagar = 0;
                             if (importeAbierto == 0)
                             {
-                                // Mock platform query: returns RESPCODE = "00" and Importe = 20.00
-                                string platformRespCode = "00"; // Mock default
-                                if (platformRespCode == "00")
+                                try
                                 {
-                                    importeAPagar = 20.00m; // Mock default 20.00
+                                    GrabaLog($"Consultando SOAP para referencia {referencia}, emisor {idEmisor}", "ValidarReferencia_SOAP");
+
+                                    string soapEnvelope = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+  <soap:Body>
+    <Consulta xmlns=""http://tempuri.org/"">
+      <Comercio>0</Comercio>
+      <Sucursal>1</Sucursal>
+      <Caja>1</Caja>
+      <Cajero>1</Cajero>
+      <Horario>1</Horario>
+      <Ticket>1</Ticket>
+      <FolioComercio>1</FolioComercio>
+      <Operacion>000030</Operacion>
+      <Referencia>{referencia}</Referencia>
+      <Monto>0.00</Monto>
+      <Emisor>275</Emisor>
+      <ModoIngreso>022</ModoIngreso>
+      <Comision>0</Comision>
+      <SKU></SKU>
+      <Referencia2>0002001XPAY4567890123456789081</Referencia2>
+      <Referencia3></Referencia3>
+      <Reintento>0</Reintento>
+    </Consulta>
+  </soap:Body>
+</soap:Envelope>";
+
+                                    var content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
+                                    content.Headers.Add("SOAPAction", "\"http://tempuri.org/Consulta\"");
+
+                                    var response = _httpClient.PostAsync(_soapUrl, content).GetAwaiter().GetResult();
+                                    var responseXml = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                                    GrabaLog($"SOAP Response: {responseXml}", "ValidarReferencia_SOAP");
+
+                                    if (response.IsSuccessStatusCode)
+                                    {
+                                        var xmlDoc = new XmlDocument();
+                                        xmlDoc.LoadXml(responseXml);
+
+                                        var respCodeNode = xmlDoc.GetElementsByTagName("RespCode");
+                                        var datosAdicionalesNode = xmlDoc.GetElementsByTagName("DatosAdicionales");
+
+                                        string platformRespCode = respCodeNode.Count > 0 ? respCodeNode[0]?.InnerText ?? "99" : "99";
+
+                                        if (platformRespCode == "00")
+                                        {
+                                            // Parsear DatosAdicionales: "0|Saldo|123.45|EFVO|300"
+                                            if (datosAdicionalesNode.Count > 0)
+                                            {
+                                                string datosAdicionales = datosAdicionalesNode[0]?.InnerText ?? string.Empty;
+                                                GrabaLog($"DatosAdicionales: {datosAdicionales}", "ValidarReferencia_SOAP");
+
+                                                if (!string.IsNullOrEmpty(datosAdicionales))
+                                                {
+                                                    var partes = datosAdicionales.Split('|');
+                                                    if (partes.Length >= 3)
+                                                    {
+                                                        string montoStr = partes[2]; // El tercer elemento es el saldo/monto
+                                                        decimal.TryParse(montoStr, NumberStyles.Any, CultureInfo.InvariantCulture, out importeAPagar);
+                                                        GrabaLog($"Monto extraído de SOAP: {importeAPagar}", "ValidarReferencia_SOAP");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            resp.Code = "99";
+                                            resp.Message = $"SOAP retornó error: {platformRespCode}";
+                                            GrabaLog($"SOAP Error Code: {platformRespCode}", "ValidarReferencia_SOAP_Error");
+                                            return resp;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        resp.Code = "99";
+                                        resp.Message = $"Error HTTP SOAP: {response.StatusCode}";
+                                        GrabaLog($"SOAP HTTP Error: {response.StatusCode}", "ValidarReferencia_SOAP_Error");
+                                        return resp;
+                                    }
                                 }
-                                else
+                                catch (Exception ex)
                                 {
+                                    GrabaLog($"Error SOAP: {ex.Message}", "ValidarReferencia_SOAP_Error");
                                     resp.Code = "99";
-                                    resp.Message = "No se pudo consultar";
+                                    resp.Message = "Error al consultar plataforma SOAP";
                                     return resp;
                                 }
                             }
