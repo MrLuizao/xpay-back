@@ -7,6 +7,11 @@ using System.IO;
 using System.Text;
 using System.Globalization;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Security.Authentication;
+using System.Xml;
+using System.Threading.Tasks;
 using ReferenciaXPayAPI_Core.Models;
 
 //api-estandar-restful
@@ -28,6 +33,8 @@ namespace ReferenciaXPayAPI_Core.Logic
         private readonly string _connectionReferencias;
         private readonly string _connectionUsuarios;
         private readonly string _logPath;
+        private readonly string _soapUrl;
+        private readonly HttpClient _httpClient;
 
         public ReferenciaLogic(IConfiguration configuration)
         {
@@ -35,6 +42,18 @@ namespace ReferenciaXPayAPI_Core.Logic
             _connectionReferencias = _configuration.GetValue<string>("BD_Referencias") ?? string.Empty;
             _connectionUsuarios = _configuration.GetValue<string>("BD_Usuarios") ?? string.Empty;
             _logPath = _configuration.GetValue<string>("LogFiles") ?? string.Empty;
+
+            bool usePruebas = _configuration.GetValue<bool>("SOAP:UsePruebas", true);
+            _soapUrl = usePruebas
+                ? _configuration.GetValue<string>("SOAP:UrlPruebas") ?? string.Empty
+                : _configuration.GetValue<string>("SOAP:UrlProduccion") ?? string.Empty;
+
+            var handler = new HttpClientHandler
+            {
+                SslProtocols = SslProtocols.Tls12,
+                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+            };
+            _httpClient = new HttpClient(handler);
         }
 
         public void GrabaLog(string text, string flag)
@@ -629,6 +648,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                                     int? sucursalIdValue = null;
                                     string fechaPagoValue = "";
                                     string folioTransaccionValue = "";
+                                    int? comercioIdValue = null;
 
                                     try 
                                     {
@@ -640,6 +660,7 @@ namespace ReferenciaXPayAPI_Core.Logic
                                     try { if (sqlReader["SucursalId"] != DBNull.Value) sucursalIdValue = Convert.ToInt32(sqlReader["SucursalId"]); } catch { }
                                     try { if (sqlReader["FechaPago"] != DBNull.Value) fechaPagoValue = sqlReader["FechaPago"].ToString() ?? ""; } catch { }
                                     try { if (sqlReader["FolioTransaccion"] != DBNull.Value) folioTransaccionValue = sqlReader["FolioTransaccion"].ToString() ?? ""; } catch { }
+                                    try { if (sqlReader["comercioId"] != DBNull.Value) comercioIdValue = Convert.ToInt32(sqlReader["comercioId"]); } catch { }
 
                                     list.Add(new HistorialRecibosModel
                                     {
@@ -653,7 +674,8 @@ namespace ReferenciaXPayAPI_Core.Logic
                                         ReferenciaXPay = sqlReader["ReferenciaXPay"]?.ToString() ?? "",
                                         FechaPago = fechaPagoValue,
                                         SucursalId = sucursalIdValue,
-                                        FolioTransaccion = folioTransaccionValue
+                                        FolioTransaccion = folioTransaccionValue,
+                                        ComercioId = comercioIdValue
                                     });
                                 }
                                 resp.Data = list;
@@ -869,16 +891,95 @@ namespace ReferenciaXPayAPI_Core.Logic
                             decimal importeAPagar = 0;
                             if (importeAbierto == 0)
                             {
-                                // Mock platform query: returns RESPCODE = "00" and Importe = 20.00
-                                string platformRespCode = "00"; // Mock default
-                                if (platformRespCode == "00")
+                                try
                                 {
-                                    importeAPagar = 20.00m; // Mock default 20.00
+                                    GrabaLog($"Consultando SOAP para referencia {referencia}, emisor {idEmisor}", "ValidarReferencia_SOAP");
+
+                                    string soapEnvelope = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+                                        <soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+                                        <soap:Body>
+                                            <Consulta xmlns=""http://tempuri.org/"">
+                                            <Comercio>0</Comercio>
+                                            <Sucursal>1</Sucursal>
+                                            <Caja>1</Caja>
+                                            <Cajero>1</Cajero>
+                                            <Horario>1</Horario>
+                                            <Ticket>1</Ticket>
+                                            <FolioComercio>1</FolioComercio>
+                                            <Operacion>000030</Operacion>
+                                            <Referencia></Referencia>
+                                            <Monto>0.00</Monto>
+                                            <Emisor>275</Emisor>
+                                            <ModoIngreso>022</ModoIngreso>
+                                            <Comision>0</Comision>
+                                            <SKU></SKU>
+                                            <Referencia2>{referencia}</Referencia2>
+                                            <Referencia3></Referencia3>
+                                            <Reintento>0</Reintento>
+                                            </Consulta>
+                                        </soap:Body>
+                                        </soap:Envelope>"
+                                    ;
+
+                                    var content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
+                                    content.Headers.Add("SOAPAction", "\"http://tempuri.org/Consulta\"");
+
+                                    var response = _httpClient.PostAsync(_soapUrl, content).GetAwaiter().GetResult();
+                                    var responseXml = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                                    GrabaLog($"SOAP Response: {responseXml}", "ValidarReferencia_SOAP");
+
+                                    if (response.IsSuccessStatusCode)
+                                    {
+                                        var xmlDoc = new XmlDocument();
+                                        xmlDoc.LoadXml(responseXml);
+
+                                        var respCodeNode = xmlDoc.GetElementsByTagName("RespCode");
+                                        var datosAdicionalesNode = xmlDoc.GetElementsByTagName("DatosAdicionales");
+
+                                        string platformRespCode = respCodeNode.Count > 0 ? respCodeNode[0]?.InnerText ?? "99" : "99";
+
+                                        if (platformRespCode == "00")
+                                        {
+                                            // Parsear DatosAdicionales: "0|Saldo|123.45|EFVO|300"
+                                            if (datosAdicionalesNode.Count > 0)
+                                            {
+                                                string datosAdicionales = datosAdicionalesNode[0]?.InnerText ?? string.Empty;
+                                                GrabaLog($"DatosAdicionales: {datosAdicionales}", "ValidarReferencia_SOAP");
+
+                                                if (!string.IsNullOrEmpty(datosAdicionales))
+                                                {
+                                                    var partes = datosAdicionales.Split('|');
+                                                    if (partes.Length >= 3)
+                                                    {
+                                                        string montoStr = partes[2]; // El tercer elemento es el saldo/monto
+                                                        decimal.TryParse(montoStr, NumberStyles.Any, CultureInfo.InvariantCulture, out importeAPagar);
+                                                        GrabaLog($"Monto extraído de SOAP: {importeAPagar}", "ValidarReferencia_SOAP");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            resp.Code = "99";
+                                            resp.Message = $"SOAP retornó error: {platformRespCode}";
+                                            GrabaLog($"SOAP Error Code: {platformRespCode}", "ValidarReferencia_SOAP_Error");
+                                            return resp;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        resp.Code = "99";
+                                        resp.Message = $"Error HTTP SOAP: {response.StatusCode}";
+                                        GrabaLog($"SOAP HTTP Error: {response.StatusCode}", "ValidarReferencia_SOAP_Error");
+                                        return resp;
+                                    }
                                 }
-                                else
+                                catch (Exception ex)
                                 {
+                                    GrabaLog($"Error SOAP: {ex.Message}", "ValidarReferencia_SOAP_Error");
                                     resp.Code = "99";
-                                    resp.Message = "No se pudo consultar";
+                                    resp.Message = "Error al consultar plataforma SOAP";
                                     return resp;
                                 }
                             }
@@ -932,6 +1033,74 @@ namespace ReferenciaXPayAPI_Core.Logic
             }
 
             return resp;
+        }
+        public EncabezadoTicketModel? ObtenerEncabezadoTicket(int comercioId, int sucursalId)
+        {
+            GrabaLog($"ObtenerEncabezadoTicket llamado con comercioId={comercioId}, sucursalId={sucursalId}", "EncabezadoTicket");
+            try
+            {
+                using (SqlConnection conn = new SqlConnection(_connectionReferencias))
+                using (SqlCommand cmd = new SqlCommand("dbo.EncabezadoTicketCadenaSucursalXPay_Get", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@ID_NUM_CTECORP", comercioId);
+                    cmd.Parameters.AddWithValue("@ID_NUM_UNCTE", sucursalId);
+
+                    conn.Open();
+
+                    using (SqlDataReader rd = cmd.ExecuteReader())
+                    {
+                        int resultSetIndex = 0;
+                        do
+                        {
+                            resultSetIndex++;
+                            GrabaLog($"EncabezadoTicket: procesando result set #{resultSetIndex}", "EncabezadoTicket");
+
+                            if (!rd.HasRows)
+                            {
+                                GrabaLog($"EncabezadoTicket: result set #{resultSetIndex} sin filas", "EncabezadoTicket");
+                                continue;
+                            }
+
+                            // Loguear columnas disponibles en este result set
+                            var columnas = Enumerable.Range(0, rd.FieldCount).Select(i => rd.GetName(i));
+                            GrabaLog($"EncabezadoTicket: columnas en result set #{resultSetIndex}: {string.Join(", ", columnas)}", "EncabezadoTicket");
+
+                            while (rd.Read())
+                            {
+                                // Si es el result set de control (RESPCODE), loguearlo y continuar al siguiente
+                                bool esResultControl = false;
+                                try { var rc = rd["RESPCODE"]; esResultControl = true; } catch { }
+
+                                if (esResultControl)
+                                {
+                                    string respcode = rd["RESPCODE"]?.ToString() ?? "";
+                                    string desccode = "";
+                                    try { desccode = rd["DESCCODE"]?.ToString() ?? ""; } catch { }
+                                    GrabaLog($"EncabezadoTicket: result set control → RESPCODE={respcode}, DESCCODE={desccode}", "EncabezadoTicket");
+                                    break; // pasar al NextResult
+                                }
+
+                                // Es el result set de datos
+                                var enc = new EncabezadoTicketModel();
+                                try { enc.Nombre    = rd["Nombre"]?.ToString()    ?? ""; } catch { }
+                                try { enc.Direccion = rd["Direccion"]?.ToString() ?? ""; } catch { }
+                                try { enc.RFC       = rd["RFC"]?.ToString()       ?? ""; } catch { }
+                                GrabaLog($"EncabezadoTicket: datos obtenidos → Nombre={enc.Nombre}, RFC={enc.RFC}", "EncabezadoTicket");
+                                return enc;
+                            }
+                        }
+                        while (rd.NextResult());
+
+                        GrabaLog("EncabezadoTicket: ningún result set devolvió datos de encabezado", "EncabezadoTicket_Warning");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GrabaLog($"Error en ObtenerEncabezadoTicket (comercio={comercioId}, sucursal={sucursalId}): {ex.Message}", "EncabezadoTicket_Error");
+            }
+            return null;
         }
     }
 }

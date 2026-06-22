@@ -45,7 +45,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 var jsonReqMessage = JsonConvert.SerializeObject(model);
                 _referenciaLogic.GrabaLog(jsonReqMessage, "json");
 
-                var response = _camposLogic.ProcesarReferencia(model.Referencia);
+                var response = _camposLogic.ProcesarReferencia(model.Referencia, model.ComercioId, model.SucursalId);
 
                 if (response.RespCode == "00")
                 {
