@@ -7,7 +7,9 @@ using System.IO;
 using System.Text;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Security.Authentication;
 using System.Xml;
 using System.Threading.Tasks;
 using ReferenciaXPayAPI_Core.Models;
@@ -42,11 +44,16 @@ namespace ReferenciaXPayAPI_Core.Logic
             _logPath = _configuration.GetValue<string>("LogFiles") ?? string.Empty;
 
             bool usePruebas = _configuration.GetValue<bool>("SOAP:UsePruebas", true);
-            _soapUrl = usePruebas 
+            _soapUrl = usePruebas
                 ? _configuration.GetValue<string>("SOAP:UrlPruebas") ?? string.Empty
                 : _configuration.GetValue<string>("SOAP:UrlProduccion") ?? string.Empty;
 
-            _httpClient = new HttpClient();
+            var handler = new HttpClientHandler
+            {
+                SslProtocols = SslProtocols.Tls12,
+                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+            };
+            _httpClient = new HttpClient(handler);
         }
 
         public void GrabaLog(string text, string flag)
@@ -889,29 +896,30 @@ namespace ReferenciaXPayAPI_Core.Logic
                                     GrabaLog($"Consultando SOAP para referencia {referencia}, emisor {idEmisor}", "ValidarReferencia_SOAP");
 
                                     string soapEnvelope = $@"<?xml version=""1.0"" encoding=""utf-8""?>
-<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
-  <soap:Body>
-    <Consulta xmlns=""http://tempuri.org/"">
-      <Comercio>0</Comercio>
-      <Sucursal>1</Sucursal>
-      <Caja>1</Caja>
-      <Cajero>1</Cajero>
-      <Horario>1</Horario>
-      <Ticket>1</Ticket>
-      <FolioComercio>1</FolioComercio>
-      <Operacion>000030</Operacion>
-      <Referencia>{referencia}</Referencia>
-      <Monto>0.00</Monto>
-      <Emisor>275</Emisor>
-      <ModoIngreso>022</ModoIngreso>
-      <Comision>0</Comision>
-      <SKU></SKU>
-      <Referencia2>0002001XPAY4567890123456789081</Referencia2>
-      <Referencia3></Referencia3>
-      <Reintento>0</Reintento>
-    </Consulta>
-  </soap:Body>
-</soap:Envelope>";
+                                        <soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+                                        <soap:Body>
+                                            <Consulta xmlns=""http://tempuri.org/"">
+                                            <Comercio>0</Comercio>
+                                            <Sucursal>1</Sucursal>
+                                            <Caja>1</Caja>
+                                            <Cajero>1</Cajero>
+                                            <Horario>1</Horario>
+                                            <Ticket>1</Ticket>
+                                            <FolioComercio>1</FolioComercio>
+                                            <Operacion>000030</Operacion>
+                                            <Referencia></Referencia>
+                                            <Monto>0.00</Monto>
+                                            <Emisor>275</Emisor>
+                                            <ModoIngreso>022</ModoIngreso>
+                                            <Comision>0</Comision>
+                                            <SKU></SKU>
+                                            <Referencia2>{referencia}</Referencia2>
+                                            <Referencia3></Referencia3>
+                                            <Reintento>0</Reintento>
+                                            </Consulta>
+                                        </soap:Body>
+                                        </soap:Envelope>"
+                                    ;
 
                                     var content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
                                     content.Headers.Add("SOAPAction", "\"http://tempuri.org/Consulta\"");
