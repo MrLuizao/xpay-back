@@ -43,10 +43,13 @@ namespace ReferenciaXPayAPI_Core.Logic
             _connectionUsuarios = _configuration.GetValue<string>("BD_Usuarios") ?? string.Empty;
             _logPath = _configuration.GetValue<string>("LogFiles") ?? string.Empty;
 
-            bool usePruebas = _configuration.GetValue<bool>("SOAP:UsePruebas", true);
-            _soapUrl = usePruebas
-                ? _configuration.GetValue<string>("SOAP:UrlPruebas") ?? string.Empty
-                : _configuration.GetValue<string>("SOAP:UrlProduccion") ?? string.Empty;
+            // bool usePruebas = _configuration.GetValue<bool>("SOAP:UsePruebas", true);
+            // _soapUrl = usePruebas
+            //     ? _configuration.GetValue<string>("SOAP:UrlPruebas") ?? string.Empty
+            //     : _configuration.GetValue<string>("SOAP:UrlProduccion") ?? string.Empty;
+            
+            _soapUrl = _configuration.GetValue<string>("SOAP:Url") ?? string.Empty;
+
 
             var handler = new HttpClientHandler
             {
