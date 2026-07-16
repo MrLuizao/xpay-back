@@ -791,6 +791,61 @@ namespace ReferenciaXPayAPI_Core.Logic
             return resp;
         }
 
+        public ApiResponse<VerReciboModel> ObtenerCuerpoTicket(int folioTransaccion)
+        {
+            ApiResponse<VerReciboModel> resp = new ApiResponse<VerReciboModel>
+            {
+                Code = "99",
+                Message = "Error Desconocido",
+                Data = null
+            };
+
+            using (SqlConnection conn = new SqlConnection(_connectionReferencias))
+            {
+                using (SqlCommand sqlComando = new SqlCommand("dbo.CuerpoTicketIMSSXPay_Get", conn))
+                {
+                    try
+                    {
+                        sqlComando.CommandType = CommandType.StoredProcedure;
+                        sqlComando.Parameters.AddWithValue("@IDS_NUM_STANDIN", folioTransaccion);
+
+                        conn.Open();
+
+                        using (SqlDataReader sqlReader = sqlComando.ExecuteReader())
+                        {
+                            string ticket = string.Empty;
+                            bool found = false;
+
+                            if (sqlReader.HasRows && sqlReader.Read())
+                            {
+                                try { ticket = sqlReader["Ticket"]?.ToString() ?? string.Empty; } catch { }
+                                found = !string.IsNullOrEmpty(ticket);
+                            }
+
+                            if (found)
+                            {
+                                resp.Code = "success";
+                                resp.Message = "Consulta exitosa";
+                                resp.Data = new VerReciboModel { Ticket = ticket };
+                            }
+                            else
+                            {
+                                resp.Code = "404";
+                                resp.Message = "No se encontró el recibo para el folio de transacción indicado";
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        GrabaLog("Error en ObtenerCuerpoTicket: " + ex.Message, "CuerpoTicketIMSSXPay_Get");
+                        resp.Code = "500";
+                        resp.Message = ex.Message;
+                    }
+                }
+            }
+            return resp;
+        }
+
         public ApiResponse<ValidarReferenciaResponseModel> ValidarReferencia(string referencia)
         {
             ApiResponse<ValidarReferenciaResponseModel> resp = new ApiResponse<ValidarReferenciaResponseModel>
