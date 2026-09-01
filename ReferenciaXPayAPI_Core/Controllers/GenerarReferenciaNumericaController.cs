@@ -88,7 +88,7 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 {
                     double? importeIMSS = importeCalculado.HasValue ? (double)importeCalculado.Value : null;
 
-                    resp.respcode = "00";
+                    resp.respcode = cRespcode;
                     resp.referenciaNumerica = cReferenciaNumerica;
                     resp.referenciaXPay = cReferencia;
                     resp.vigencia = fechaVigenciaIMSS;
@@ -97,8 +97,8 @@ namespace ReferenciaXPayAPI_Core.Controllers
                 }
                 else
                 {
-                    resp.respcode = "14";
-                    resp.referenciaNumerica = string.Empty;
+                    resp.respcode = !string.IsNullOrEmpty(cRespcode) ? cRespcode : "14";
+                    resp.referenciaNumerica = cReferenciaNumerica;
                     return StatusCode(500, new { code = "500", message = "Error en el procesamiento de la base de datos", detail = cRespcode });
                 }
             }
